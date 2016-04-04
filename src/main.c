@@ -26,64 +26,7 @@
 #include <linux/sched.h>
 #include <errno.h>
 
-syshook_process_t* syshook_handle_new_process(syshook_context_t* context, pid_t ppid, pid_t pid);
-
 static void* sys_call_table[SYSHOOK_NUM_SYSCALLS] = {0};
-
-SYSCALL_DEFINE0(fork)
-{
-    printf("%s\n", __func__);
-    return syshook_invoke_hookee(process);
-}
-
-SYSCALL_DEFINE0(vfork)
-{
-    printf("%s\n", __func__);
-    return syshook_invoke_hookee(process);
-}
-
-SYSCALL_DEFINE1(clone, unsigned long, clone_flags)
-{
-    // We do not support containers. If one of the containers related flags was set, fail the call.
-    if(clone_flags & (CLONE_NEWIPC|CLONE_NEWNET|CLONE_NEWNS|CLONE_NEWPID|CLONE_NEWUTS)) {
-        return -EINVAL;
-    }
-
-    // Whatever it originally was, add a CLONE_PTRACE to the flags so that we remain in control
-    clone_flags|=CLONE_PTRACE;
-    clone_flags&=~CLONE_UNTRACED; // Reset the UNTRACED flag
-
-    // call hookee
-    syshook_argument_set(process, 0, (long)clone_flags);
-    pid_t newpid = (pid_t)syshook_invoke_hookee(process);
-
-    if(newpid!=-1) {
-        pid_t parent = process->pid;
-
-        if((clone_flags&CLONE_PARENT) || (clone_flags&CLONE_THREAD))
-            parent = process->ppid;
-
-        syshook_process_t* newprocess = syshook_handle_new_process(process->context, parent, newpid);
-        newprocess->clone_flags = clone_flags;
-    }
-
-    return newpid;
-}
-
-SYSCALL_DEFINE3(execve, const char __user *, path,
-		const char __user *const __user *, argv,
-		const char __user *const __user *, envp)
-{
-    (void)(path);
-    (void)(argv);
-    (void)(envp);
-
-    printf("%s\n", __func__);
-    long rc = syshook_invoke_hookee(process);
-    process->expect_execve = true;
-
-    return rc;
-}
 
 SYSCALL_DEFINE2(openat, int, dirfd, const char __user*, pathname)
 {
@@ -122,10 +65,6 @@ SYSCALL_DEFINE0(getuid32)
 int main(int argc, char** argv) {
 
     // register syscalls
-    register_syscall(fork);
-    register_syscall(vfork);
-    register_syscall(clone);
-    register_syscall(execve);
     //register_syscall(getuid32);
     register_syscall(openat);
 

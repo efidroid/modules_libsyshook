@@ -12,6 +12,7 @@ add_definitions(-DSYSHOOK_INTERNAL)
 # main
 add_executable(init
     src/syshook.c
+    src/defaults.c
     src/arch/arm/arch.c
 
     # main code

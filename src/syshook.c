@@ -356,6 +356,8 @@ int syshook_execve(char **argv, void** sys_call_table) {
     list_initialize(&context->processes);
     context->sys_call_table = sys_call_table;
 
+    syshook_register_defaults(context);
+
     // register root process
     syshook_handle_new_process(context, -1, pid);
 
