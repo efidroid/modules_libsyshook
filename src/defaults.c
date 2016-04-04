@@ -19,16 +19,32 @@
 
 #include <common.h>
 
+long do_fork(syshook_process_t* process, bool is_vfork) {
+    // Turn the fork/vfork into a clone
+    int clone_flags=CLONE_PTRACE|SIGCHLD;
+
+    if(is_vfork) {
+        clone_flags|=CLONE_VFORK|CLONE_VM;
+    }
+
+    long rc = syshook_invoke_syscall(process, SYS_clone, clone_flags, 0);
+
+    if(rc!=-1) {
+        syshook_process_t* newprocess = syshook_handle_new_process(process->context, process->pid, (pid_t)rc);
+        newprocess->clone_flags = clone_flags;
+    }
+
+    return rc;
+}
+
 SYSCALL_DEFINE0(fork)
 {
-    printf("%s\n", __func__);
-    return syshook_invoke_hookee(process);
+    return do_fork(process, false);
 }
 
 SYSCALL_DEFINE0(vfork)
 {
-    printf("%s\n", __func__);
-    return syshook_invoke_hookee(process);
+    return do_fork(process, true);
 }
 
 SYSCALL_DEFINE1(clone, unsigned long, clone_flags)
