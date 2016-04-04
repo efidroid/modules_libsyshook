@@ -7,11 +7,11 @@
 #define is_wide_instruction(instr)      ((unsigned)(instr) >= 0xe800)
 #endif
 
-void syshook_arch_get_state(pid_t pid, void* state) {
+void syshook_arch_get_state(syshook_process_t* process, void* state) {
     syshook_internal_t* pdata = state;
     struct pt_regs* regs = (void*)pdata->regs;
 
-    safe_ptrace(PTRACE_GETREGS, pid, 0, regs);
+    queue_ptrace(process, PTRACE_GETREGS, process->pid, 0, regs);
 
     // reset
     pdata->lowargs_changed = false;
@@ -19,13 +19,13 @@ void syshook_arch_get_state(pid_t pid, void* state) {
     pdata->scno_changed = false;
 }
 
-void syshook_arch_set_state(pid_t pid, void* state) {
+void syshook_arch_set_state(syshook_process_t* process, void* state) {
     syshook_internal_t* pdata = state;
     const struct pt_regs* regs = (void*)pdata->regs;
 
     if(pdata->scno_changed) {
         //LOGD("apply scno\n");
-        safe_ptrace(PTRACE_SET_SYSCALL, pid, 0, (void*)regs->ARM_r7);
+        queue_ptrace(process, PTRACE_SET_SYSCALL, process->pid, 0, (void*)regs->ARM_r7);
     }
 
     if(pdata->highargs_changed && syshook_arch_is_entry(state)) {
@@ -41,32 +41,32 @@ void syshook_arch_set_state(pid_t pid, void* state) {
         // get pc and instruction
         unsigned long instr;
         long pc = syshook_arch_get_pc(state);
-        if(syshook_copy_from_user_internal(pid, &instr, (void*)pc, sizeof(instr))) {
+        if(syshook_copy_from_user(process, &instr, (void*)pc, sizeof(instr))) {
             LOGE("can't read instruction at PC\n");
             safe_exit(-1);
         }
 
         // change scno to getpid
-        safe_ptrace(PTRACE_SET_SYSCALL, pid, 0, (void*)SYS_getpid);
+        queue_ptrace(process, PTRACE_SET_SYSCALL, process->pid, 0, (void*)SYS_getpid);
         syshook_arch_syscall_set(state, SYS_getpid);
 
         // copy new state to process
-        safe_ptrace(PTRACE_SETREGS, pid, 0, (void*)regs);
+        queue_ptrace(process, PTRACE_SETREGS, process->pid, 0, (void*)regs);
 
         // continue
-        safe_ptrace(PTRACE_SYSCALL, pid, 0, (void*)0);
+        queue_ptrace(process, PTRACE_SYSCALL, process->pid, 0, (void*)0);
 
         // wait for EXIT
-        safe_waitpid(pid, &status, __WALL);
+        safe_waitpid(process->pid, &status, __WALL);
 
         // parse status
-        syshook_parse_child_signal(pid, status, &parsed_status);
+        syshook_parse_child_signal(process, status, &parsed_status);
 
         // verify status
         switch(parsed_status.type) {
             case STATUS_TYPE_SYSCALL:
                 // get new state
-                syshook_arch_get_state(pid, state);
+                syshook_arch_get_state(process, state);
                 break;
 
             default:
@@ -75,28 +75,28 @@ void syshook_arch_set_state(pid_t pid, void* state) {
         }
 
         // set registers
-        safe_ptrace(PTRACE_SETREGS, pid, 0, (void*)regs);
+        queue_ptrace(process, PTRACE_SETREGS, process->pid, 0, (void*)regs);
 
         // set back PC
         syshook_arch_set_pc(state, pc - syshook_arch_get_instruction_size(instr));
 
         // copy new state to process
-        safe_ptrace(PTRACE_SETREGS, pid, 0, (void*)regs);
+        queue_ptrace(process, PTRACE_SETREGS, process->pid, 0, (void*)regs);
 
         // continue
-        safe_ptrace(PTRACE_SYSCALL, pid, 0, (void*)0);
+        queue_ptrace(process, PTRACE_SYSCALL, process->pid, 0, (void*)0);
 
         // wait for ENTRY
-        safe_waitpid(pid, &status, __WALL);
+        safe_waitpid(process->pid, &status, __WALL);
 
         // parse status
-        syshook_parse_child_signal(pid, status, &parsed_status);
+        syshook_parse_child_signal(process, status, &parsed_status);
 
         // verify status
         switch(parsed_status.type) {
             case STATUS_TYPE_SYSCALL:
                 // get new state
-                syshook_arch_get_state(pid, state);
+                syshook_arch_get_state(process, state);
                 break;
 
             default:
@@ -106,13 +106,13 @@ void syshook_arch_set_state(pid_t pid, void* state) {
 
         // restore regs
         syshook_arch_syscall_set(state, scno);
-        safe_ptrace(PTRACE_SET_SYSCALL, pid, 0, (void*)scno);
+        queue_ptrace(process, PTRACE_SET_SYSCALL, process->pid, 0, (void*)scno);
         syshook_arch_argument_set(state, 0, a0);
     }
 
     if(pdata->lowargs_changed || pdata->highargs_changed) {
         //LOGD("apply lowregs\n");
-        safe_ptrace(PTRACE_SETREGS, pid, 0, (void*)regs);
+        queue_ptrace(process, PTRACE_SETREGS, process->pid, 0, (void*)regs);
     }
 
     // reset
@@ -131,12 +131,6 @@ bool syshook_arch_is_entry(void* state) {
 void syshook_arch_copy_state(void* dst, void* src) {
     memcpy(dst, src, PLATFORM_STATE_SIZE);
 }
-
-/*void* syshook_duplicate_state(void* state) {
-    void* mem = safe_malloc(PLATFORM_STATE_SIZE);
-    syshook_copy_state(mem, state);
-    return mem;
-}*/
 
 long syshook_arch_get_pc(void* state) {
     syshook_internal_t* pdata = state;

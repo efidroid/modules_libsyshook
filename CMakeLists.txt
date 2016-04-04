@@ -17,7 +17,7 @@ add_executable(init
     # main code
     src/main.c
 )
-
+target_link_libraries(init pthread)
 include_directories(
     include
     include_private

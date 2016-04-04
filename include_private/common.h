@@ -36,7 +36,8 @@
 
 // logging
 //#define LOGE(fmt, ...) fprintf(stderr, "[%s:%u] " fmt, __func__, __LINE__, ##__VA_ARGS__)
-#define LOGE(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__); fflush(stderr);
+#define LOGE(fmt, ...) fprintf(stderr, "[%lu] " fmt, pthread_self(), ##__VA_ARGS__); fflush(stderr);
+//#define LOGE(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__); fflush(stderr);
 #define LOGD LOGE
 
 typedef enum {
@@ -158,8 +159,10 @@ static inline void* safe_calloc(size_t num, size_t size) {
     return mem;
 }
 
-long syshook_copy_from_user_internal(pid_t pid, void *to, const void __user * from, unsigned long n);
-void syshook_parse_child_signal(pid_t pid, int status, parsed_status_t* pstatus);
+void syshook_parse_child_signal(syshook_process_t* process, int status, parsed_status_t* pstatus);
 syshook_process_t* syshook_handle_new_process(syshook_context_t* context, pid_t ppid, pid_t pid);
+
+long queue_ptrace(syshook_process_t* process, enum __ptrace_request request, pid_t pid,
+                   void *addr, void *data);
 
 #endif

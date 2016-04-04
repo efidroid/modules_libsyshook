@@ -85,6 +85,22 @@ SYSCALL_DEFINE1(clone, unsigned long, clone_flags)
     return newpid;
 }
 
+SYSCALL_DEFINE3(execve, const char __user *, path,
+		const char __user *const __user *, argv,
+		const char __user *const __user *, envp)
+{
+    (void)(path);
+    (void)(argv);
+    (void)(envp);
+
+    printf("%s\n", __func__);
+    long rc = syshook_invoke_hookee(process);
+    process->expect_execve = true;
+
+    return rc;
+}
+
+#if 0
 SYSCALL_DEFINE2(openat, int, dirfd, const char __user*, pathname)
 {
     char pathname_k[PATH_MAX];
@@ -111,6 +127,12 @@ SYSCALL_DEFINE2(openat, int, dirfd, const char __user*, pathname)
 
     return rc;
 }
+#endif
+
+SYSCALL_DEFINE0(getuid32)
+{
+    return 1000;
+}
 
 #define register_syscall(name) sys_call_table[SYS_##name] = sys_##name;
 
@@ -120,6 +142,8 @@ int main(int argc, char** argv) {
     register_syscall(fork);
     register_syscall(vfork);
     register_syscall(clone);
+    register_syscall(execve);
+    register_syscall(getuid32);
     //register_syscall(openat);
 
     // start syshook

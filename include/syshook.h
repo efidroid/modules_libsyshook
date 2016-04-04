@@ -19,6 +19,8 @@
 
 #include <unistd.h>
 #include <stdint.h>
+#include <pthread.h>
+#include <sys/ptrace.h>
 
 #include <syshook/list.h>
 #include <syshook/syscalls.h>
@@ -28,17 +30,41 @@
 typedef struct {
     int pagesize;
     list_node_t processes;
+    list_node_t queue;
     void** sys_call_table;
+
+    pthread_t main_thread;
+    pthread_mutex_t lock;
 } syshook_context_t;
 
 typedef struct {
+    // list
     list_node_t node;
 
+    // thread
+    pthread_t thread;
+    bool should_stop;
+
+    // ptrace queue
+    list_node_t queue_node;
+    pthread_mutex_t queue_mutex;
+    pthread_cond_t queue_cond;
+
+    enum __ptrace_request ptrace_request;
+    pid_t ptrace_pid;
+    void* ptrace_addr;
+    void* ptrace_data;
+
+    long ptrace_rc;
+
+    // info
     syshook_context_t* context;
     pid_t pid;
     pid_t ppid;
     bool sigstop_received;
+    bool expect_execve;
 
+    // status
     void* original_state;
     void* state;
 } syshook_process_t;
@@ -51,8 +77,6 @@ long syshook_invoke_hookee(syshook_process_t* process);
 long syshook_invoke_syscall(syshook_process_t* process, long scno, ...);
 
 // argument modification
-//void* syshook_duplicate_state(void* state);
-//void syshook_copy_state(void* dst, void* src);
 long syshook_argument_get(syshook_process_t* process, int num);
 void syshook_argument_set(syshook_process_t* process, int num, long value);
 

@@ -29,8 +29,8 @@ typedef struct {
 
 #define PLATFORM_STATE_SIZE (sizeof(syshook_internal_t) + (18*4))
 
-void syshook_arch_get_state(pid_t pid, void* state);
-void syshook_arch_set_state(pid_t pid, void* state);
+void syshook_arch_get_state(syshook_process_t* process, void* state);
+void syshook_arch_set_state(syshook_process_t* process, void* state);
 void syshook_arch_copy_state(void* dst, void* src);
 
 long syshook_arch_get_pc(void* state);
