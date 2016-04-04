@@ -24,33 +24,8 @@
 
 static void syshook_handle_child_signal(syshook_context_t* context, pid_t pid, int status);
 
-long queue_ptrace(syshook_process_t* process, enum __ptrace_request request, pid_t pid,
-                   void *addr, void *data)
-{
-    pthread_mutex_lock(&process->queue_mutex);
-
-    // add process to queue
-    pthread_mutex_lock(&process->context->lock);
-    process->ptrace_request = request;
-    process->ptrace_pid = pid;
-    process->ptrace_addr = addr;
-    process->ptrace_data = data;
-    list_add_tail(&process->context->queue, &process->queue_node);
-    pthread_mutex_unlock(&process->context->lock);
-
-    // notify main thread
-    pthread_kill(process->context->main_thread, SIGUSR1);
-
-    // wait for the result
-    pthread_cond_wait(&process->queue_cond, &process->queue_mutex);
-
-    pthread_mutex_unlock(&process->queue_mutex);
-
-    return process->ptrace_rc;
-}
-
 static void syshook_continue(syshook_process_t* process, int signal) {
-    queue_ptrace(process, PTRACE_SYSCALL, process->pid, 0, (void*)signal);
+    safe_ptrace(PTRACE_SYSCALL, process->pid, 0, (void*)signal);
 }
 
 static syshook_process_t* get_process_data(syshook_context_t* context, pid_t pid) {
@@ -63,30 +38,7 @@ static syshook_process_t* get_process_data(syshook_context_t* context, pid_t pid
     return NULL;
 }
 
-static void* syshook_thread(syshook_process_t* process) {
-    pid_t pid;
-    int rc;
-
-    // main loop
-    while(!process->should_stop) {
-        // wait for change
-        pid = safe_waitpid(process->pid, &rc, __WALL);
-
-        syshook_handle_child_signal(process->context, pid, rc);
-    }
-
-    LOGD("stopped %d\n", process->pid);
-
-    free(process->state);
-    free(process->original_state);
-    free(process);
-
-    return NULL;
-}
-
 syshook_process_t* syshook_handle_new_process(syshook_context_t* context, pid_t ppid, pid_t pid) {
-    //int status;
-
     syshook_process_t* process = safe_calloc(1, sizeof(syshook_process_t));
     process->context = context;
     process->pid = pid;
@@ -94,41 +46,13 @@ syshook_process_t* syshook_handle_new_process(syshook_context_t* context, pid_t 
     process->original_state = safe_calloc(1, PLATFORM_STATE_SIZE);
     process->state = safe_calloc(1, PLATFORM_STATE_SIZE);
     process->sigstop_received = false;
-    pthread_mutex_init(&process->queue_mutex, NULL);
-    pthread_cond_init(&process->queue_cond, NULL);
 
     if(ppid==-1)
         process->sigstop_received = true;
 
-    pthread_mutex_lock(&context->lock);
     list_add_tail(&context->processes, &process->node);
-    pthread_mutex_unlock(&context->lock);
 
     LOGD("new process pid=%d ppid=%d\n", pid, ppid);
-
-    pthread_create(&process->thread, NULL, (void*)syshook_thread, process);
-
-#if 0
-    if(ppid!=-1) {
-        // wait for SIGSTOP
-        safe_waitpid(process->pid, &status, __WALL);
-
-        // parse status
-        parsed_status_t parsed_status;
-        syshook_parse_child_signal(process->pid, status, &parsed_status);
-
-        // verify status
-        if(!(parsed_status.type==STATUS_TYPE_OTHER && parsed_status.signal==SIGSTOP)) {
-            LOGE("invalid status\n");
-            safe_exit(-1);
-        }
-
-        LOGD("got sigstop\n");
-
-        // continue
-        syshook_continue(process, 0);
-    }
-#endif
 
     return process;
 }
@@ -139,10 +63,11 @@ static void syshook_handle_stop_process(syshook_process_t* process) {
 
     LOGD("stopping %d\n", process->pid);
 
-    pthread_mutex_lock(&process->context->lock);
-    process->should_stop = true;
     list_delete(&process->node);
-    pthread_mutex_unlock(&process->context->lock);
+
+    free(process->state);
+    free(process->original_state);
+    free(process);
 }
 
 static long syshook_invoke_syscall_handler(syshook_process_t* process, long scno, ...) {
@@ -310,8 +235,8 @@ void syshook_parse_child_signal(syshook_process_t* process, int status, parsed_s
             siginfo_t siginfo;
             unsigned long data;
 
-            queue_ptrace(process, PTRACE_GETSIGINFO, process->pid, NULL, &siginfo);
-            queue_ptrace(process, PTRACE_GETEVENTMSG, process->pid, NULL, &data);
+            safe_ptrace(PTRACE_GETSIGINFO, process->pid, NULL, &siginfo);
+            safe_ptrace(PTRACE_GETEVENTMSG, process->pid, NULL, &data);
             
             int event = siginfo.si_code>>8;
             switch(event) {
@@ -404,28 +329,10 @@ static void syshook_handle_child_signal(syshook_context_t* context, pid_t pid, i
     }
 }
 
-static syshook_context_t* global_context = NULL;
-static void queue_handler(int signal) {
-    (void)(signal);
-
-    pthread_mutex_lock(&global_context->lock);
-
-    while(!list_is_empty(&global_context->queue)) {
-        syshook_process_t* process = list_remove_tail_type(&global_context->queue, syshook_process_t, queue_node);
-        pthread_mutex_lock(&process->queue_mutex);
-
-        process->ptrace_rc = safe_ptrace(process->ptrace_request, process->ptrace_pid, process->ptrace_addr, process->ptrace_data);
-        pthread_cond_signal(&process->queue_cond);
-
-        pthread_mutex_unlock(&process->queue_mutex);
-    }
-
-    pthread_mutex_unlock(&global_context->lock);
-}
-
 // public API
 
 int syshook_execve(char **argv, void** sys_call_table) {
+    int status;
     pid_t pid = safe_fork();
 
     // child
@@ -446,18 +353,18 @@ int syshook_execve(char **argv, void** sys_call_table) {
     syshook_context_t* context = safe_calloc(1, sizeof(syshook_context_t));
     context->pagesize = getpagesize();
     list_initialize(&context->processes);
-    list_initialize(&context->queue);
     context->sys_call_table = sys_call_table;
-    pthread_mutex_init(&context->lock, NULL);
-    context->main_thread = pthread_self();
 
-    // register queue handler
-    global_context = context;
-    signal(SIGUSR1, queue_handler);
+    // register root process
+    syshook_handle_new_process(context, -1, pid);
 
-    // add root process
-    syshook_process_t* process = syshook_handle_new_process(context, -1, pid);
-    pthread_join(process->thread, NULL);
+    // main loop
+    while(!list_is_empty(&context->processes)) {
+        // wait for change
+        pid = safe_waitpid(-1, &status, __WALL);
+
+        syshook_handle_child_signal(context, pid, status);
+    }
 
     LOGD("ALL CHILDS FINISHED\n");
 
@@ -642,7 +549,7 @@ long syshook_copy_from_user(syshook_process_t* process, void *to, const void __u
     size_t offset=((unsigned long)from)%sizeof(long);
     from-=offset;
     char *dst=(char *)to;
-    long buffer=queue_ptrace(process, PTRACE_PEEKDATA, process->pid, (void*)from, 0);
+    long buffer=safe_ptrace(PTRACE_PEEKDATA, process->pid, (void*)from, 0);
     if( buffer==-1 && errno!=0 )
         return 0; // false means failure
 
@@ -660,7 +567,7 @@ long syshook_copy_from_user(syshook_process_t* process, void *to, const void __u
             from+=offset;
             offset=0;
 
-            buffer=queue_ptrace(process, PTRACE_PEEKDATA, process->pid, (void*)from, 0);
+            buffer=safe_ptrace(PTRACE_PEEKDATA, process->pid, (void*)from, 0);
             if( buffer==-1 && errno!=0 )
                 return 0; // false means failure
         }
@@ -679,7 +586,7 @@ long syshook_copy_to_user(syshook_process_t* process, void __user *to, const voi
 
     if( offset!=0 ) {
         // We have "Stuff" hanging before the area we need to fill - initialize the buffer
-        buffer=queue_ptrace(process, PTRACE_PEEKDATA, process->pid, to, 0 );
+        buffer=safe_ptrace(PTRACE_PEEKDATA, process->pid, to, 0 );
     }
 
     const char *src=from;
@@ -692,7 +599,7 @@ long syshook_copy_to_user(syshook_process_t* process, void __user *to, const voi
         n--;
 
         if( offset==sizeof(long) ) {
-            queue_ptrace(process, PTRACE_POKEDATA, process->pid, to, (void*)buffer);
+            safe_ptrace(PTRACE_POKEDATA, process->pid, to, (void*)buffer);
             to+=offset;
             offset=0;
         }
@@ -701,14 +608,14 @@ long syshook_copy_to_user(syshook_process_t* process, void __user *to, const voi
     if( errno==0 && offset!=0 ) {
         // We have leftover data we still need to transfer. Need to make sure we are not
         // overwriting data outside of our intended area
-        long buffer2=queue_ptrace(process, PTRACE_PEEKDATA, process->pid, to, 0 );
+        long buffer2=safe_ptrace(PTRACE_PEEKDATA, process->pid, to, 0 );
 
         unsigned int i;
         for( i=offset; i<sizeof(long); ++i )
             ((char *)&buffer)[i]=((char *)&buffer2)[i];
 
         if( errno==0 )
-            queue_ptrace(process, PTRACE_POKEDATA, process->pid, to, (void*)buffer);
+            safe_ptrace(PTRACE_POKEDATA, process->pid, to, (void*)buffer);
     }
 
     return errno;
@@ -723,7 +630,7 @@ long syshook_strncpy_user(syshook_process_t* process, char *to, const char __use
     int word_offset=0;
 
     while( !done ) {
-        unsigned long word=queue_ptrace(process, PTRACE_PEEKDATA, process->pid, (void*)(from+(word_offset++)*sizeof(long)), 0 );
+        unsigned long word=safe_ptrace(PTRACE_PEEKDATA, process->pid, (void*)(from+(word_offset++)*sizeof(long)), 0 );
 
         while( !done && offset<sizeof(long) && i<n ) {
             to[i]=((char *)&word)[offset]; /* Endianity neutral copy */

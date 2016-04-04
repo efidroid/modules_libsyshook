@@ -19,7 +19,6 @@
 
 #include <unistd.h>
 #include <stdint.h>
-#include <pthread.h>
 #include <sys/ptrace.h>
 
 #include <syshook/list.h>
@@ -30,32 +29,12 @@
 typedef struct {
     int pagesize;
     list_node_t processes;
-    list_node_t queue;
     void** sys_call_table;
-
-    pthread_t main_thread;
-    pthread_mutex_t lock;
 } syshook_context_t;
 
 typedef struct {
     // list
     list_node_t node;
-
-    // thread
-    pthread_t thread;
-    bool should_stop;
-
-    // ptrace queue
-    list_node_t queue_node;
-    pthread_mutex_t queue_mutex;
-    pthread_cond_t queue_cond;
-
-    enum __ptrace_request ptrace_request;
-    pid_t ptrace_pid;
-    void* ptrace_addr;
-    void* ptrace_data;
-
-    long ptrace_rc;
 
     // info
     syshook_context_t* context;
