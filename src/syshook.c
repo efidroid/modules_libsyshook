@@ -197,8 +197,20 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
     int scno = syshook_arch_syscall_get(process->state);
     bool is_entry = syshook_arch_is_entry(process->state);
 
+    // ignore this one and just continue
     if(process->expect_execve && scno==SYS_execve) {
         process->expect_execve = false;
+        return 0;
+    }
+
+    // this call will not have an exit, continue
+    if(scno==SYS_restart_syscall) {
+        return 0;
+    }
+
+    // the syscall had no handler and got ignored
+    if(process->expect_syscall_exit) {
+        process->expect_syscall_exit = false;
         return 0;
     }
 
@@ -221,9 +233,15 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
         }
     }
 
+    else {
+        // ignore this call
+        process->expect_syscall_exit = true;
+        return 0;
+    }
+
     // make sure we leave this function with the child in EXIT
     is_entry = syshook_arch_is_entry(process->state);
-    if(is_entry && scno!=SYS_restart_syscall) {
+    if(is_entry) {
         int status;
 
         // copy new state to process

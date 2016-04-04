@@ -63,6 +63,7 @@ typedef struct {
     pid_t ppid;
     bool sigstop_received;
     bool expect_execve;
+    bool expect_syscall_exit;
 
     // status
     void* original_state;
