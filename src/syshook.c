@@ -164,7 +164,7 @@ static long syshook_invoke_syscall_handler(syshook_process_t* process, long scno
 static void syshook_copy_state_diffs(void* dst, void* src) {
     // restore all arguments but result
     int i;
-    for(i=1; i<=6; i++) {
+    for(i=0; i<=6; i++) {
         long val = syshook_arch_argument_get(dst, i);
         long val_backup = syshook_arch_argument_get(src, i);
         if(val!=val_backup) {
@@ -177,6 +177,13 @@ static void syshook_copy_state_diffs(void* dst, void* src) {
     int scno_backup = syshook_arch_syscall_get(src);
     if(scno_now!=scno_backup) {
         syshook_arch_syscall_set(dst, scno_backup);
+    }
+
+    // restore result
+    int rc_now = syshook_arch_result_get(dst);
+    int rc_backup = syshook_arch_result_get(src);
+    if(rc_now!=rc_backup) {
+        syshook_arch_result_set(dst, rc_backup);
     }
 }
 
@@ -237,6 +244,8 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
             case STATUS_TYPE_SYSCALL:
                 // get new state
                 syshook_arch_get_state(process, process->state);
+
+                ret = syshook_arch_result_get(process->state);
                 break;
             case STATUS_TYPE_EXIT:
                 syshook_handle_stop_process(process);
@@ -251,10 +260,9 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
     // restore state
     syshook_copy_state_diffs(process->state, process->original_state);
 
-    if(handler_exists) {
-        // set return value
-        syshook_arch_result_set(process->state, ret);
-    }
+    // set return value
+    // this makes sure that set_state uses the result cache instead of thr r0 register value
+    syshook_arch_result_set(process->state, ret);
 
     // copy new state to process
     syshook_arch_set_state(process, process->state);

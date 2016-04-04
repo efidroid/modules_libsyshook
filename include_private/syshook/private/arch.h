@@ -24,6 +24,7 @@ typedef struct {
     bool highargs_changed;
     bool scno_changed;
     bool result_changed;
+    long result;
     char regs[0];
 } syshook_internal_t;
 

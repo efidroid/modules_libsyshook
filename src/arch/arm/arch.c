@@ -12,16 +12,18 @@ void syshook_arch_get_state(syshook_process_t* process, void* state) {
     struct pt_regs* regs = (void*)pdata->regs;
 
     queue_ptrace(process, PTRACE_GETREGS, process->pid, 0, regs);
+    pdata->result = syshook_arch_argument_get(state, 0);
 
     // reset
     pdata->lowargs_changed = false;
     pdata->highargs_changed = false;
     pdata->scno_changed = false;
+    pdata->result_changed = false;
 }
 
 void syshook_arch_set_state(syshook_process_t* process, void* state) {
     syshook_internal_t* pdata = state;
-    const struct pt_regs* regs = (void*)pdata->regs;
+    struct pt_regs* regs = (void*)pdata->regs;
 
     if(pdata->scno_changed) {
         //LOGD("apply scno\n");
@@ -110,6 +112,10 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
         syshook_arch_argument_set(state, 0, a0);
     }
 
+    if(pdata->result_changed) {
+        regs->ARM_r0 = pdata->result;
+    }
+
     if(pdata->lowargs_changed || pdata->highargs_changed) {
         //LOGD("apply lowregs\n");
         queue_ptrace(process, PTRACE_SETREGS, process->pid, 0, (void*)regs);
@@ -119,6 +125,7 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
     pdata->lowargs_changed = false;
     pdata->highargs_changed = false;
     pdata->scno_changed = false;
+    pdata->result_changed = false;
 }
 
 bool syshook_arch_is_entry(void* state) {
@@ -211,12 +218,13 @@ void syshook_arch_argument_set(void* state, int num, long value) {
 }
 
 long syshook_arch_result_get(void* state) {
-    return syshook_arch_argument_get(state, 0);
+    syshook_internal_t* pdata = state;
+    return pdata->result;
 }
 
 void syshook_arch_result_set(void* state, long value) {
     syshook_internal_t* pdata = state;
 
-    syshook_arch_argument_set(state, 0, value);
+    pdata->result = value;
     pdata->result_changed = true;
 }
