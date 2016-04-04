@@ -43,6 +43,7 @@ syshook_process_t* syshook_handle_new_process(syshook_context_t* context, pid_t 
     process->context = context;
     process->pid = pid;
     process->ppid = ppid;
+    process->creatorpid = process->ppid;
     process->original_state = safe_calloc(1, PLATFORM_STATE_SIZE);
     process->state = safe_calloc(1, PLATFORM_STATE_SIZE);
     process->sigstop_received = false;

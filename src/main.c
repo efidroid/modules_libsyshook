@@ -44,8 +44,6 @@ SYSCALL_DEFINE0(vfork)
 
 SYSCALL_DEFINE1(clone, unsigned long, clone_flags)
 {
-    printf("%s(%lu) from %d\n", __func__, clone_flags, process->pid);
-
     // We do not support containers. If one of the containers related flags was set, fail the call.
     if(clone_flags & (CLONE_NEWIPC|CLONE_NEWNET|CLONE_NEWNS|CLONE_NEWPID|CLONE_NEWUTS)) {
         return -EINVAL;
@@ -60,27 +58,14 @@ SYSCALL_DEFINE1(clone, unsigned long, clone_flags)
     pid_t newpid = (pid_t)syshook_invoke_hookee(process);
 
     if(newpid!=-1) {
-        printf("success pid=%d\n", newpid);
+        pid_t parent = process->pid;
 
-        //unsigned long hnp_flags = 0;
-        if(clone_flags&CLONE_VM)
-            printf("CLONE_VM\n");
-        if((clone_flags&CSIGNAL) != SIGCHLD )
-            printf("SIGCHLD\n");
-        if(clone_flags&CLONE_THREAD)
-            printf("CLONE_THREAD\n");
-
-        //pid_t parent = state->m_tid;
         if((clone_flags&CLONE_PARENT) || (clone_flags&CLONE_THREAD))
-            printf("CLONE_PARENT || CLONE_THREAD\n");
-            //parent = state->m_ppid;
+            parent = process->ppid;
 
-        syshook_handle_new_process(process->context, process->pid, newpid);
-    } else {
-        printf("error: %d\n", newpid);
+        syshook_process_t* newprocess = syshook_handle_new_process(process->context, parent, newpid);
+        newprocess->clone_flags = clone_flags;
     }
-
-
 
     return newpid;
 }
@@ -100,9 +85,9 @@ SYSCALL_DEFINE3(execve, const char __user *, path,
     return rc;
 }
 
-#if 0
 SYSCALL_DEFINE2(openat, int, dirfd, const char __user*, pathname)
 {
+
     char pathname_k[PATH_MAX];
     syshook_strncpy_user(process, pathname_k, pathname, PATH_MAX);
 
@@ -117,17 +102,15 @@ SYSCALL_DEFINE2(openat, int, dirfd, const char __user*, pathname)
     }
 
     // caal hookee
-    printf("%s(%d, %s) = ", __func__, dirfd, pathname_k);
-    long rc;
-    rc = syshook_invoke_hookee(process);
-    printf("%d\n", (int)rc);
+    //printf("%s(%d, %s) = ", __func__, dirfd, pathname_k);
+    long rc = syshook_invoke_hookee(process);
+    //printf("%d\n", (int)rc);
 
     // free memory
     syshook_invoke_syscall(process, SYS_munmap, addr, process->context->pagesize);
 
     return rc;
 }
-#endif
 
 SYSCALL_DEFINE0(getuid32)
 {
@@ -143,8 +126,8 @@ int main(int argc, char** argv) {
     register_syscall(vfork);
     register_syscall(clone);
     register_syscall(execve);
-    register_syscall(getuid32);
-    //register_syscall(openat);
+    //register_syscall(getuid32);
+    register_syscall(openat);
 
     // start syshook
     if(argc<=1) {

@@ -40,9 +40,11 @@ typedef struct {
     syshook_context_t* context;
     pid_t pid;
     pid_t ppid;
+    pid_t creatorpid;
     bool sigstop_received;
     bool expect_execve;
     bool expect_syscall_exit;
+    unsigned long clone_flags;
 
     // status
     void* original_state;
