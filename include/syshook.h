@@ -39,6 +39,7 @@ typedef struct {
     // info
     syshook_context_t* context;
     pid_t pid;
+    pid_t tid;
     pid_t ppid;
     pid_t creatorpid;
     bool sigstop_received;
@@ -46,7 +47,7 @@ typedef struct {
     bool expect_syscall_exit;
     bool expect_new_child;
     unsigned long clone_flags;
-    bool waiting_for_ppid;
+    bool waiting_for_info;
     void* exit_handler;
 
     // status

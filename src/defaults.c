@@ -24,14 +24,14 @@ SYSCALL_DEFINE0(fork)
     // Turn the fork/vfork into a clone
     int clone_flags=CLONE_PTRACE|SIGCHLD;
 
-    long rc = syshook_invoke_syscall(process, SYS_clone, clone_flags, 0);
+    pid_t pid = (pid_t)syshook_invoke_syscall(process, SYS_clone, clone_flags, 0);
 
-    if(rc!=-1) {
-        syshook_process_t* newprocess = syshook_handle_new_process(process->context, process->pid, (pid_t)rc);
+    if(pid!=-1) {
+        syshook_process_t* newprocess = syshook_handle_new_process(process->context, pid, pid, process->pid, process->pid);
         newprocess->clone_flags = clone_flags;
     }
 
-    return rc;
+    return pid;
 }
 
 SYSCALL_DEFINE0(vfork)
@@ -70,7 +70,6 @@ SYSCALL_DEFINE1(clone, unsigned long, clone_flags)
 
     // set new clone_flags
     syshook_argument_set(process, 0, (long)clone_flags);
-
     if(clone_flags & CLONE_VFORK) {
         // the process will be continued and we'll get called again, later
         process->handler_context[0] = clone_flags;
@@ -80,19 +79,25 @@ SYSCALL_DEFINE1(clone, unsigned long, clone_flags)
     }
 
     // call hookee
-    pid_t newpid = (pid_t)syshook_invoke_hookee(process);
+    pid_t newtid = (pid_t)syshook_invoke_hookee(process);
 
-    if(newpid!=-1) {
+    if(newtid!=-1) {
+        pid_t newpid = newtid;
         pid_t parent = process->pid;
 
-        if((clone_flags&CLONE_PARENT) || (clone_flags&CLONE_THREAD))
-            parent = process->ppid;
+        if(clone_flags&CLONE_THREAD) {
+            newpid = process->pid;
+        }
 
-        syshook_process_t* newprocess = syshook_handle_new_process(process->context, parent, newpid);
+        if((clone_flags&CLONE_PARENT) || (clone_flags&CLONE_THREAD)) {
+            parent = process->ppid;
+        }
+
+        syshook_process_t* newprocess = syshook_handle_new_process(process->context, newpid, newtid, parent, process->pid);
         newprocess->clone_flags = clone_flags;
     }
 
-    return newpid;
+    return newtid;
 }
 
 SYSCALL_DEFINE0(execve)
