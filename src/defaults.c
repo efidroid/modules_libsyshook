@@ -19,13 +19,10 @@
 
 #include <common.h>
 
-static long do_fork(syshook_process_t* process, bool is_vfork) {
+SYSCALL_DEFINE0(fork)
+{
     // Turn the fork/vfork into a clone
     int clone_flags=CLONE_PTRACE|SIGCHLD;
-
-    if(is_vfork) {
-        clone_flags|=CLONE_VFORK|CLONE_VM;
-    }
 
     long rc = syshook_invoke_syscall(process, SYS_clone, clone_flags, 0);
 
@@ -37,14 +34,27 @@ static long do_fork(syshook_process_t* process, bool is_vfork) {
     return rc;
 }
 
-SYSCALL_DEFINE0(fork)
-{
-    return do_fork(process, false);
-}
-
 SYSCALL_DEFINE0(vfork)
 {
-    return do_fork(process, true);
+    if(syshook_is_entry(process)) {
+        // Turn the fork/vfork into a clone
+        int clone_flags=CLONE_PTRACE|SIGCHLD;
+        clone_flags|=CLONE_VFORK|CLONE_VM;
+
+        syshook_syscall_set(process, SYS_clone);
+        syshook_argument_set(process, 0, clone_flags);
+        syshook_argument_set(process, 1, 0);
+
+        // the process will be continued and we'll get called again, later
+        process->handler_context[0] = clone_flags;
+        process->exit_handler = sys_vfork;
+        process->expect_new_child = true;
+        return 0;
+    }
+
+    else {
+        return syshook_result_get(process);
+    }
 }
 
 SYSCALL_DEFINE1(clone, unsigned long, clone_flags)
@@ -58,8 +68,18 @@ SYSCALL_DEFINE1(clone, unsigned long, clone_flags)
     clone_flags|=CLONE_PTRACE;
     clone_flags&=~CLONE_UNTRACED; // Reset the UNTRACED flag
 
-    // call hookee
+    // set new clone_flags
     syshook_argument_set(process, 0, (long)clone_flags);
+
+    if(clone_flags & CLONE_VFORK) {
+        // the process will be continued and we'll get called again, later
+        process->handler_context[0] = clone_flags;
+        process->exit_handler = sys_vfork;
+        process->expect_new_child = true;
+        return 0;
+    }
+
+    // call hookee
     pid_t newpid = (pid_t)syshook_invoke_hookee(process);
 
     if(newpid!=-1) {

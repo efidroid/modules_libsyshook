@@ -72,10 +72,20 @@ static void syshook_handle_stop_process(syshook_process_t* process) {
 }
 
 static long syshook_invoke_syscall_handler(syshook_process_t* process, long scno, ...) {
-    if(scno>=SYSHOOK_NUM_SYSCALLS || !process->context->sys_call_table[scno])
-        return -1;
+    long (*fn)(syshook_process_t*, ...);
 
-    long (*fn)(syshook_process_t*, ...) = process->context->sys_call_table[scno];
+    if(process->exit_handler) {
+        fn = process->exit_handler;
+        process->exit_handler = NULL;
+    }
+
+    else {
+        if(scno>=SYSHOOK_NUM_SYSCALLS || !process->context->sys_call_table[scno])
+            return -1;
+
+        fn = process->context->sys_call_table[scno];
+    }
+
     long a0 = syshook_arch_argument_get(process->state, 0);
     long a1 = syshook_arch_argument_get(process->state, 1);
     long a2 = syshook_arch_argument_get(process->state, 2);
@@ -140,17 +150,74 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
         return 0;
     }
 
-    //LOGD("[%d][SYSCALL][%s] %d\n", process->pid, is_entry?"ENTRY":"EXIT", scno);
+    LOGD("[%d][SYSCALL][%s] %d\n", process->pid, is_entry?"ENTRY":"EXIT", scno);
 
-    if(!is_entry) {
+    if(!is_entry && !process->exit_handler) {
         LOGE("invalid status\n");
         safe_exit(-1);
     }
 
+    // apparently, the exit did not happen
+    if(is_entry) {
+        process->expect_syscall_exit = false;
+    }
+
+    // set-up new CLONE_VFORK child
+    if(process->waiting_for_ppid) {
+        pid_t ppid = (pid_t)syshook_invoke_syscall(process, SYS_getppid);
+        if(ppid<0) {
+            LOGE("can't get ppid\n");
+            safe_exit(-1);
+        }
+
+        syshook_process_t* parent_process = get_process_data(process->context, ppid);
+        if(!parent_process) {
+            LOGE("can't get parent process\n");
+            safe_exit(-1);
+        }
+
+        syshook_process_t* creator_process = parent_process;
+        if(!parent_process->expect_new_child) {
+            syshook_process_t *entry;
+            list_for_every_entry(&process->context->processes, entry, syshook_process_t, node) {
+                if(entry->ppid==ppid && entry->expect_new_child) {
+                    creator_process = entry;
+                    break;
+                }
+            }
+
+            if(!creator_process->expect_new_child) {
+                LOGE("creator process doesn't expect a new child\n");
+                safe_exit(-1);
+            }
+        }
+
+        long clone_flags = creator_process->handler_context[0];
+
+        process->clone_flags = clone_flags;
+        process->ppid = parent_process->pid;
+        process->creatorpid = creator_process->pid;
+
+        creator_process->expect_new_child = false;
+        process->waiting_for_ppid = false;
+    }
+
     long ret = -1;
-    bool handler_exists = (scno<SYSHOOK_NUM_SYSCALLS && process->context->sys_call_table[scno]);
+    bool handler_exists = (scno<SYSHOOK_NUM_SYSCALLS && process->context->sys_call_table[scno]) || process->exit_handler;
     if(handler_exists) {
         ret = syshook_invoke_syscall_handler(process, scno);
+
+        // call handler again later if/when the syscall returns
+        if(process->exit_handler) {
+            if(!syshook_arch_is_entry(process->state)) {
+                LOGE("exit_handler is set, but process is in exit state already");
+                safe_exit(-1);
+            }
+
+            // copy new state to process
+            syshook_arch_set_state(process, process->state);
+            return 0;
+        }
 
         // the handler didn't call the original function, so convert the call to getpid
         is_entry = syshook_arch_is_entry(process->state);
@@ -181,7 +248,7 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
 
         // parse status
         parsed_status_t parsed_status;
-        syshook_parse_child_signal(process, status, &parsed_status);
+        syshook_parse_child_signal(process->pid, status, &parsed_status);
 
         // verify status
         switch(parsed_status.type) {
@@ -211,21 +278,23 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
     // copy new state to process
     syshook_arch_set_state(process, process->state);
 
+    process->exit_handler = NULL;
+
     return 0;
 }
 
-void syshook_parse_child_signal(syshook_process_t* process, int status, parsed_status_t* pstatus) {
+void syshook_parse_child_signal(pid_t pid, int status, parsed_status_t* pstatus) {
     int signal = 0;
 
     if(WIFEXITED(status)) {
         signal = WEXITSTATUS(status);
-        LOGD("[%d] exit with %d\n", process->pid, signal);
+        LOGD("[%d] exit with %d\n", pid, signal);
         pstatus->type = STATUS_TYPE_EXIT;
     }
 
     else if(WIFSIGNALED(status)) {
         signal = WTERMSIG(status);
-        LOGD("[%d] received %s\n", process->pid, sig2str(signal));
+        LOGD("[%d] received %s\n", pid, sig2str(signal));
         pstatus->type = STATUS_TYPE_EXIT;
     }
 
@@ -236,13 +305,13 @@ void syshook_parse_child_signal(syshook_process_t* process, int status, parsed_s
             siginfo_t siginfo;
             unsigned long data;
 
-            safe_ptrace(PTRACE_GETSIGINFO, process->pid, NULL, &siginfo);
-            safe_ptrace(PTRACE_GETEVENTMSG, process->pid, NULL, &data);
+            safe_ptrace(PTRACE_GETSIGINFO, pid, NULL, &siginfo);
+            safe_ptrace(PTRACE_GETEVENTMSG, pid, NULL, &data);
             
             int event = siginfo.si_code>>8;
             switch(event) {
                 case PTRACE_EVENT_EXIT:
-                    LOGD("[%d][TRAP] event=%s exit_status=%d\n", process->pid, ptraceevent2str(event), (int)data);
+                    LOGD("[%d][TRAP] event=%s exit_status=%d\n", pid, ptraceevent2str(event), (int)data);
                     pstatus->type = STATUS_TYPE_EXIT;
                     break;
 
@@ -250,12 +319,12 @@ void syshook_parse_child_signal(syshook_process_t* process, int status, parsed_s
                 case PTRACE_EVENT_FORK:
                 case PTRACE_EVENT_CLONE:
                 case PTRACE_EVENT_VFORK_DONE:
-                    LOGD("[%d][TRAP] event=%s clone_pid=%d\n", process->pid, ptraceevent2str(event), (pid_t)data);
+                    LOGD("[%d][TRAP] event=%s clone_pid=%d\n", pid, ptraceevent2str(event), (pid_t)data);
                     pstatus->type = STATUS_TYPE_CLONE;
                     break;
 
                 case PTRACE_EVENT_SECCOMP:
-                    LOGD("[%d][TRAP] event=%s seccomp\n", process->pid, ptraceevent2str(event));
+                    LOGD("[%d][TRAP] event=%s seccomp\n", pid, ptraceevent2str(event));
                     pstatus->type = STATUS_TYPE_OTHER;
                     break;
 
@@ -264,7 +333,7 @@ void syshook_parse_child_signal(syshook_process_t* process, int status, parsed_s
                     break;
 
                 default:
-                    LOGE("[%d][TRAP] unknown event %d\n", process->pid, event);
+                    LOGE("[%d][TRAP] unknown event %d\n", pid, event);
                     safe_exit(-1);
             }
 
@@ -277,18 +346,18 @@ void syshook_parse_child_signal(syshook_process_t* process, int status, parsed_s
         }
 
         else {
-            LOGD("[%d] stopped with %s\n", process->pid, sig2str(signal));
+            LOGD("[%d] stopped with %s\n", pid, sig2str(signal));
             pstatus->type = STATUS_TYPE_OTHER;
         }
     }
 
     else if(WIFCONTINUED(status)) {
-        LOGD("[%d] continued\n", process->pid);
+        LOGD("[%d] continued\n", pid);
         pstatus->type = STATUS_TYPE_OTHER;
     }
 
     else {
-        LOGE("[%d] unknown status 0x%x\n", process->pid, status);
+        LOGE("[%d] unknown status 0x%x\n", pid, status);
         safe_exit(-1);
     }
 
@@ -299,8 +368,8 @@ static void syshook_handle_child_signal(syshook_context_t* context, pid_t pid, i
     parsed_status_t parsed_status;
 
     syshook_process_t* process = get_process_data(context, pid);
-    syshook_parse_child_signal(process, status, &parsed_status);
 
+    syshook_parse_child_signal(pid, status, &parsed_status);
     switch(parsed_status.type) {
         case STATUS_TYPE_EXIT:
             syshook_handle_stop_process(process);
@@ -308,16 +377,35 @@ static void syshook_handle_child_signal(syshook_context_t* context, pid_t pid, i
 
         case STATUS_TYPE_CLONE:
             // TODO
+            LOGE("clone signal\n");
             syshook_continue(process, 0);
             break;
 
         case STATUS_TYPE_SYSCALL:
+            if(!process) {
+                LOGE("received syscall from unknown child\n");
+                safe_exit(-1);
+            }
+
             if(syshook_handle_child_syscall(process)==0) {
                 syshook_continue(process, 0);
             }
             break;
             
         case STATUS_TYPE_OTHER:
+            if(!process && parsed_status.signal==SIGSTOP) {
+                LOGD("new fork child\n");
+
+                // assume that this is a forked child
+                process = syshook_handle_new_process(context, -1, pid);
+                process->waiting_for_ppid = true;
+            }
+
+            if(!process) {
+                LOGE("received signal from unknown child\n");
+                safe_exit(-1);
+            }
+
             if(!process->sigstop_received && parsed_status.signal==SIGSTOP) {
                 LOGD("got first sigstop\n");
                 process->sigstop_received = true;
@@ -393,7 +481,7 @@ long syshook_invoke_hookee(syshook_process_t* process) {
 
     // parse status
     parsed_status_t parsed_status;
-    syshook_parse_child_signal(process, status, &parsed_status);
+    syshook_parse_child_signal(process->pid, status, &parsed_status);
 
     // verify status
     switch(parsed_status.type) {
@@ -444,7 +532,7 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
         safe_waitpid(process->pid, &status, __WALL);
 
         // parse status
-        syshook_parse_child_signal(process, status, &parsed_status);
+        syshook_parse_child_signal(process->pid, status, &parsed_status);
 
         // verify status
         switch(parsed_status.type) {
@@ -482,7 +570,7 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
     safe_waitpid(process->pid, &status, __WALL);
 
     // parse status
-    syshook_parse_child_signal(process, status, &parsed_status);
+    syshook_parse_child_signal(process->pid, status, &parsed_status);
 
     // verify status
     switch(parsed_status.type) {
@@ -517,7 +605,7 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
         safe_waitpid(process->pid, &status, __WALL);
 
         // parse status
-        syshook_parse_child_signal(process, status, &parsed_status);
+        syshook_parse_child_signal(process->pid, status, &parsed_status);
 
         // verify status
         switch(parsed_status.type) {
@@ -536,6 +624,18 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
     syshook_copy_state_diffs(process->state, state);
 
     return ret;
+}
+
+bool syshook_is_entry(syshook_process_t* process) {
+    return syshook_arch_is_entry(process->state);
+}
+
+void syshook_syscall_set(syshook_process_t* process, int scno) {
+    syshook_arch_syscall_set(process->state, scno);
+}
+
+long syshook_result_get(syshook_process_t* process) {
+    return syshook_arch_result_get(process->state);
 }
 
 long syshook_argument_get(syshook_process_t* process, int num) {

@@ -62,7 +62,7 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
         safe_waitpid(process->pid, &status, __WALL);
 
         // parse status
-        syshook_parse_child_signal(process, status, &parsed_status);
+        syshook_parse_child_signal(process->pid, status, &parsed_status);
 
         // verify status
         switch(parsed_status.type) {
@@ -92,7 +92,7 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
         safe_waitpid(process->pid, &status, __WALL);
 
         // parse status
-        syshook_parse_child_signal(process, status, &parsed_status);
+        syshook_parse_child_signal(process->pid, status, &parsed_status);
 
         // verify status
         switch(parsed_status.type) {

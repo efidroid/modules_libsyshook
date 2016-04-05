@@ -159,7 +159,7 @@ static inline void* safe_calloc(size_t num, size_t size) {
     return mem;
 }
 
-void syshook_parse_child_signal(syshook_process_t* process, int status, parsed_status_t* pstatus);
+void syshook_parse_child_signal(pid_t pid, int status, parsed_status_t* pstatus);
 syshook_process_t* syshook_handle_new_process(syshook_context_t* context, pid_t ppid, pid_t pid);
 void syshook_register_defaults(syshook_context_t* context);
 
