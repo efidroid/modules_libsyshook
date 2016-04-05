@@ -30,7 +30,7 @@ struct list_node {
 
 typedef struct list_node list_node_t;
 
-#ifdef SYSHOOK_INTERNAL
+#if defined(SYSHOOK_INTERNAL) || defined(SYSHOOK_ENABLE_LIST_FUNCTIONS)
 
 #include <stdbool.h>
 #include <stddef.h>
