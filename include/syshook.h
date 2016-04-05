@@ -19,7 +19,6 @@
 
 #include <unistd.h>
 #include <stdint.h>
-#include <sys/ptrace.h>
 
 #include <syshook/list.h>
 #include <syshook/syscalls.h>
