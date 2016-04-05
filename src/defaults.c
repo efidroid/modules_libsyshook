@@ -83,6 +83,12 @@ SYSCALL_DEFINE0(execve)
     return rc;
 }
 
+
+SYSCALL_DEFINE0(ptrace)
+{
+    return -1;
+}
+
 #define syshook_register_syscall(name) if(!context->sys_call_table[SYS_##name]) context->sys_call_table[SYS_##name] = sys_##name;
 void syshook_register_defaults(syshook_context_t* context) {
     // register syscalls
@@ -90,4 +96,6 @@ void syshook_register_defaults(syshook_context_t* context) {
     syshook_register_syscall(vfork);
     syshook_register_syscall(clone);
     syshook_register_syscall(execve);
+
+    syshook_register_syscall(ptrace);
 }
