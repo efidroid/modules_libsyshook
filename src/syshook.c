@@ -454,7 +454,7 @@ static void syshook_handle_child_signal(syshook_context_t* context, pid_t tid, i
 
 // public API
 
-int syshook_execve(char **argv, void** sys_call_table) {
+int syshook_execvp(char **argv, void** sys_call_table) {
     int status;
     pid_t pid = safe_fork();
 

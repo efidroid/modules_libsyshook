@@ -77,8 +77,8 @@ int main(int argc, char** argv) {
         par[i++] = "/init";
         par[i++] = (char *)0;
 
-        return syshook_execve(par, sys_call_table);
+        return syshook_execvp(par, sys_call_table);
     }
 
-    return syshook_execve(argv+1, sys_call_table);
+    return syshook_execvp(argv+1, sys_call_table);
 }

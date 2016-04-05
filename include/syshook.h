@@ -58,7 +58,7 @@ typedef struct {
 } syshook_process_t;
 
 // syshook init
-int syshook_execve(char **argv, void** sys_call_table);
+int syshook_execvp(char **argv, void** sys_call_table);
 
 // syscall invocation
 long syshook_invoke_hookee(syshook_process_t* process);
