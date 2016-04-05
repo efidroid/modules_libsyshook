@@ -88,7 +88,7 @@ static long syshook_invoke_syscall_handler(syshook_process_t* process, long scno
 }
 
 static void syshook_copy_state_diffs(void* dst, void* src) {
-    // restore all arguments but result
+    // restore arguments
     int i;
     for(i=0; i<=6; i++) {
         long val = syshook_arch_argument_get(dst, i);
@@ -205,7 +205,7 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
     syshook_copy_state_diffs(process->state, process->original_state);
 
     // set return value
-    // this makes sure that set_state uses the result cache instead of thr r0 register value
+    // this makes sure that set_state uses the result cache instead of the r0 register value
     syshook_arch_result_set(process->state, ret);
 
     // copy new state to process

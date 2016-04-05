@@ -99,6 +99,7 @@ static inline const char *ptraceevent2str(int event){
 // safety wrappers
 
 static inline __attribute__((noreturn)) void safe_exit(int status) {
+    LOGE("EXIT\n");
     exit(status);
     for(;;);
 }

@@ -19,7 +19,7 @@
 
 #include <common.h>
 
-long do_fork(syshook_process_t* process, bool is_vfork) {
+static long do_fork(syshook_process_t* process, bool is_vfork) {
     // Turn the fork/vfork into a clone
     int clone_flags=CLONE_PTRACE|SIGCHLD;
 
