@@ -48,7 +48,6 @@ typedef struct {
     bool sigstop_received;
     bool expect_execve;
     bool expect_syscall_exit;
-    bool expect_new_child;
     unsigned long clone_flags;
     void* exit_handler;
 
