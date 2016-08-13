@@ -2,9 +2,17 @@
 
 #include <sys/syscall.h>
 #include <linux/ptrace.h>
+#include <sys/mman.h>
+
+INJECTION_DECLARE(inj_trap_arm);
+INJECTION_DECLARE(inj_trap_thumb);
 
 #ifndef is_wide_instruction
 #define is_wide_instruction(instr)      ((unsigned)(instr) >= 0xe800)
+#endif
+
+#ifndef thumb_mode
+#define thumb_mode(regs) (((regs)->ARM_cpsr & PSR_T_BIT))
 #endif
 
 void syshook_arch_get_state(syshook_process_t* process, void* state) {
@@ -45,7 +53,7 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
         long pc = syshook_arch_get_pc(state);
         if(syshook_copy_from_user(process, &instr, (void*)pc, sizeof(instr))) {
             LOGE("can't read instruction at PC\n");
-            safe_exit(-1);
+            safe_exit(1);
         }
 
         // change scno to getpid
@@ -73,7 +81,7 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
 
             default:
                 LOGE("invalid status\n");
-                safe_exit(-1);
+                safe_exit(1);
         }
 
         // set registers
@@ -103,7 +111,7 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
 
             default:
                 LOGE("invalid status\n");
-                safe_exit(-1);
+                safe_exit(1);
         }
 
         // restore regs
@@ -154,6 +162,21 @@ void syshook_arch_set_pc(void* state, long pc) {
     pdata->lowargs_changed = true;
 }
 
+long syshook_arch_get_ip(void* state) {
+    syshook_internal_t* pdata = state;
+    const struct pt_regs* regs = (void*)pdata->regs;
+
+    return regs->ARM_ip;
+}
+
+void syshook_arch_set_ip(void* state, long ip) {
+    syshook_internal_t* pdata = state;
+    struct pt_regs* regs = (void*)pdata->regs;
+
+    regs->ARM_ip = ip;
+    pdata->lowargs_changed = true;
+}
+
 long syshook_arch_get_instruction_size(unsigned long instr) {
     return is_wide_instruction(instr)?4:2;
 }
@@ -188,7 +211,7 @@ long syshook_arch_argument_get(void* state, int num) {
         case 6: return regs->ARM_r6;
         default:
             LOGE("Invalid argument number %d\n", num);
-            safe_exit(-1);
+            safe_exit(1);
     }
 }
 
@@ -206,7 +229,7 @@ void syshook_arch_argument_set(void* state, int num, long value) {
         case 6: regs->ARM_r6 = value; break;
         default:
             LOGE("Invalid argument number %d\n", num);
-            safe_exit(-1);
+            safe_exit(1);
     }
 
     if(num<=3) {
@@ -227,4 +250,38 @@ void syshook_arch_result_set(void* state, long value) {
 
     pdata->result = value;
     pdata->result_changed = true;
+}
+
+void syshook_arch_setup_process_trap(syshook_process_t* process) {
+    void* fn_template;
+    long mem_size;
+
+    // get regs
+    syshook_internal_t* pdata = process->state;
+    const struct pt_regs* regs = (void*)pdata->regs;
+
+    // get template to use
+    if(thumb_mode(regs)){
+        fn_template = INJECTION_PTR(inj_trap_thumb);
+        mem_size = INJECTION_SIZE(inj_trap_thumb);
+    }
+    else {
+        fn_template = INJECTION_PTR(inj_trap_arm);
+        mem_size = INJECTION_SIZE(inj_trap_arm);
+    }
+    long mem_size_rounded = ROUNDUP(mem_size, process->context->pagesize);;
+
+    // allocate child memory
+    void __user *mem = (void*)syshook_invoke_syscall(process, SYS_mmap2, NULL, mem_size_rounded, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    if(mem==NULL) {
+        LOGE("can't allocate child memory\n");
+        safe_exit(1);
+    }
+
+    // copy inj_trap code
+    syshook_copy_to_user(process, mem, fn_template, mem_size);
+
+    // store context data
+    process->handler_context[0] = (long)mem;
+    process->handler_context[1] = mem_size_rounded;
 }

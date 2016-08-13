@@ -19,6 +19,7 @@
 
 #include <unistd.h>
 #include <stdint.h>
+#include <setjmp.h>
 
 #include <syshook/list.h>
 #include <syshook/syscalls.h>
@@ -29,6 +30,9 @@ typedef struct {
     int pagesize;
     list_node_t processes;
     void** sys_call_table;
+    long ptrace_options;
+
+    pthread_mutex_t lock;
 } syshook_context_t;
 
 typedef struct {
@@ -46,12 +50,17 @@ typedef struct {
     bool expect_syscall_exit;
     bool expect_new_child;
     unsigned long clone_flags;
-    bool waiting_for_info;
     void* exit_handler;
 
     // status
     void* original_state;
     void* state;
+    bool stopped;
+
+    pthread_t thread;
+    pthread_mutex_t lock;
+    pthread_cond_t cond;
+    jmp_buf jmpbuf;
 
     long handler_context[10];
 } syshook_process_t;

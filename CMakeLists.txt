@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-project(multiboot)
+project(multiboot C ASM)
 set(CMAKE_BUILD_TYPE Release)
 
 
@@ -14,11 +14,12 @@ add_executable(init
     src/syshook.c
     src/defaults.c
     src/arch/arm/arch.c
+    src/arch/arm/injections.S
 
     # main code
     src/main.c
 )
-
+target_link_libraries(init pthread)
 include_directories(
     include
     include_private

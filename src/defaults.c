@@ -19,85 +19,21 @@
 
 #include <common.h>
 
+static long handle_fork(syshook_process_t* process, unsigned long clone_flags);
+
 SYSCALL_DEFINE0(fork)
 {
-    // Turn the fork/vfork into a clone
-    int clone_flags=CLONE_PTRACE|SIGCHLD;
-
-    pid_t pid = (pid_t)syshook_invoke_syscall(process, SYS_clone, clone_flags, 0);
-
-    if(pid!=-1) {
-        syshook_process_t* newprocess = syshook_handle_new_process(process->context, pid, pid, process->pid, process->pid);
-        newprocess->clone_flags = clone_flags;
-    }
-
-    return pid;
+    return handle_fork(process, 0);
 }
 
 SYSCALL_DEFINE0(vfork)
 {
-    if(syshook_is_entry(process)) {
-        // Turn the fork/vfork into a clone
-        int clone_flags=CLONE_PTRACE|SIGCHLD;
-        clone_flags|=CLONE_VFORK|CLONE_VM;
-
-        syshook_syscall_set(process, SYS_clone);
-        syshook_argument_set(process, 0, clone_flags);
-        syshook_argument_set(process, 1, 0);
-
-        // the process will be continued and we'll get called again, later
-        process->handler_context[0] = clone_flags;
-        process->exit_handler = sys_vfork;
-        process->expect_new_child = true;
-        return 0;
-    }
-
-    else {
-        return syshook_result_get(process);
-    }
+    return handle_fork(process, 0);
 }
 
 SYSCALL_DEFINE1(clone, unsigned long, clone_flags)
 {
-    // We do not support containers. If one of the containers related flags was set, fail the call.
-    if(clone_flags & (CLONE_NEWIPC|CLONE_NEWNET|CLONE_NEWNS|CLONE_NEWPID|CLONE_NEWUTS)) {
-        return -EINVAL;
-    }
-
-    // Whatever it originally was, add a CLONE_PTRACE to the flags so that we remain in control
-    clone_flags|=CLONE_PTRACE;
-    clone_flags&=~CLONE_UNTRACED; // Reset the UNTRACED flag
-
-    // set new clone_flags
-    syshook_argument_set(process, 0, (long)clone_flags);
-    if(clone_flags & CLONE_VFORK) {
-        // the process will be continued and we'll get called again, later
-        process->handler_context[0] = clone_flags;
-        process->exit_handler = sys_vfork;
-        process->expect_new_child = true;
-        return 0;
-    }
-
-    // call hookee
-    pid_t newtid = (pid_t)syshook_invoke_hookee(process);
-
-    if(newtid!=-1) {
-        pid_t newpid = newtid;
-        pid_t parent = process->pid;
-
-        if(clone_flags&CLONE_THREAD) {
-            newpid = process->pid;
-        }
-
-        if((clone_flags&CLONE_PARENT) || (clone_flags&CLONE_THREAD)) {
-            parent = process->ppid;
-        }
-
-        syshook_process_t* newprocess = syshook_handle_new_process(process->context, newpid, newtid, parent, process->pid);
-        newprocess->clone_flags = clone_flags;
-    }
-
-    return newtid;
+    return handle_fork(process, clone_flags);
 }
 
 SYSCALL_DEFINE0(execve)
@@ -108,6 +44,22 @@ SYSCALL_DEFINE0(execve)
     return rc;
 }
 
+static long handle_fork(syshook_process_t* process, unsigned long clone_flags) {
+    if(syshook_is_entry(process)) {
+        // setup process trap
+        syshook_arch_setup_process_trap(process);
+
+        // store context data
+        process->handler_context[2] = clone_flags;
+
+        // set ourself as exit handler
+        process->exit_handler = sys_clone;
+        return 0;
+    }
+    else {
+        return syshook_result_get(process);
+    }
+}
 
 SYSCALL_DEFINE0(ptrace)
 {

@@ -30,7 +30,7 @@ static void* sys_call_table[SYSHOOK_NUM_SYSCALLS] = {0};
 
 SYSCALL_DEFINE2(openat, int, dirfd, const char __user*, pathname)
 {
-
+    (void)(dirfd);
     char pathname_k[PATH_MAX];
     syshook_strncpy_user(process, pathname_k, pathname, PATH_MAX);
 
