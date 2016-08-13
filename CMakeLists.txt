@@ -10,16 +10,12 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections -Wl,-gc-
 add_definitions(-DSYSHOOK_INTERNAL)
 
 # main
-add_executable(init
+add_library(syshook
     src/syshook.c
     src/defaults.c
     src/arch/arm/arch.c
     src/arch/arm/injections.S
-
-    # main code
-    src/main.c
 )
-target_link_libraries(init pthread)
 include_directories(
     include
     include_private
