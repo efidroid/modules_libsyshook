@@ -268,7 +268,8 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
                 // get new state
                 syshook_arch_get_state(process, process->state);
 
-                ret = syshook_arch_result_get(process->state);
+                // this should always be getpid, so keep the original return value
+                syshook_arch_result_get(process->state);
                 break;
             case STATUS_TYPE_EXIT:
                 syshook_handle_stop_process(process);
