@@ -542,7 +542,7 @@ int syshook_execvp(char **argv, void** sys_call_table) {
 
     // parse status
     if (WSTOPSIG(status) != SIGTRAP) {
-        LOGE("invalid status2\n");
+        LOGE("invalid root child status\n");
         safe_exit(1);
     }
 
