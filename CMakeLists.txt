@@ -6,6 +6,7 @@ set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wshadow")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static-libgcc -Wl,-static")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections -Wl,-gc-sections -Os -s")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
 add_definitions(-DSYSHOOK_INTERNAL)
 
