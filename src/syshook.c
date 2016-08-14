@@ -96,6 +96,13 @@ syshook_process_t* syshook_handle_new_process(syshook_context_t* context, pid_t 
     list_add_tail(&context->processes, &process->node);
     pthread_mutex_unlock(&context->lock);
 
+    if(context->create_process) {
+        int rc = context->create_process(process);
+        if(rc) {
+            safe_exit(1);
+        }
+    }
+
     LOGD("new process pid=%d tid=%d ppid=%d cpid=%d\n", pid, tid, ppid, cpid);
 
     return process;
@@ -113,6 +120,13 @@ static void syshook_handle_stop_process(syshook_process_t* process) {
 
 void syshook_delete_process(syshook_process_t* process) {
     LOGD("stopped %d\n", process->tid);
+
+    if(process->context->destroy_process) {
+        int rc = process->context->destroy_process(process);
+        if(rc) {
+            safe_exit(1);
+        }
+    }
 
     pthread_mutex_lock(&process->context->lock);
     list_delete(&process->node);
@@ -188,6 +202,14 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
     // ignore this one and just continue
     if(process->expect_execve && scno==SYS_execve) {
         process->expect_execve = false;
+
+        if(process->context->execve_process) {
+            int rc = process->context->execve_process(process);
+            if(rc) {
+                safe_exit(1);
+            }
+        }
+
         return 0;
     }
 

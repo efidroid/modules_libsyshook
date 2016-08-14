@@ -26,16 +26,25 @@
 
 #define SYSHOOK_NUM_SYSCALLS 2048
 
-typedef struct {
+typedef struct syshook_context syshook_context_t;
+typedef struct syshook_process syshook_process_t;
+
+struct syshook_context {
     int pagesize;
     syshook_list_node_t processes;
     void** sys_call_table;
     long ptrace_options;
 
+    // threading
     pthread_mutex_t lock;
-} syshook_context_t;
 
-typedef struct {
+    // callbacks
+    int (*create_process)(syshook_process_t*);
+    int (*destroy_process)(syshook_process_t*);
+    int (*execve_process)(syshook_process_t*);
+};
+
+struct syshook_process {
     // list
     syshook_list_node_t node;
 
@@ -56,13 +65,14 @@ typedef struct {
     void* state;
     bool stopped;
 
+    // threading
     pthread_t thread;
     pthread_mutex_t lock;
     pthread_cond_t cond;
     jmp_buf jmpbuf;
 
     long handler_context[10];
-} syshook_process_t;
+};
 
 // syshook init
 int syshook_execvp(char **argv, void** sys_call_table);
