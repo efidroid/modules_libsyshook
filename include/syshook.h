@@ -78,7 +78,9 @@ struct syshook_process {
 };
 
 // syshook init
+syshook_context_t* syshook_create_context(void** sys_call_table);
 int syshook_execvp(char **argv, void** sys_call_table);
+int syshook_execvp_ex(syshook_context_t* context, char **argv);
 
 // syscall invocation
 long syshook_invoke_hookee(syshook_process_t* process);

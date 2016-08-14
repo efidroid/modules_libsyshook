@@ -533,7 +533,30 @@ static void syshook_handle_child_signal(syshook_context_t* context, pid_t tid, i
 
 // public API
 
+syshook_context_t* syshook_create_context(void** sys_call_table) {
+    long ptrace_options = 0;
+
+    // these are needed to get notified of new forks
+    ptrace_options |= PTRACE_O_TRACEFORK;
+    ptrace_options |= PTRACE_O_TRACEVFORK;
+    ptrace_options |= PTRACE_O_TRACECLONE;
+
+    syshook_context_t* context = calloc(1, sizeof(syshook_context_t));
+    context->pagesize = getpagesize();
+    list_initialize(&context->processes);
+    context->sys_call_table = sys_call_table;
+    context->ptrace_options = ptrace_options;
+    pthread_mutex_init(&context->lock, NULL);
+
+    return context;
+}
+
 int syshook_execvp(char **argv, void** sys_call_table) {
+    syshook_context_t* context = syshook_create_context(sys_call_table);
+    return syshook_execvp_ex(context, argv);
+}
+
+int syshook_execvp_ex(syshook_context_t* context, char **argv) {
     int status;
 
     if(thread_context) {
@@ -569,24 +592,10 @@ int syshook_execvp(char **argv, void** sys_call_table) {
         safe_exit(1);
     }
 
-    // set ptrace options
-    long ptrace_options = 0;
-
-    // these are needed to get notified of new forks
-    ptrace_options |= PTRACE_O_TRACEFORK;
-    ptrace_options |= PTRACE_O_TRACEVFORK;
-    ptrace_options |= PTRACE_O_TRACECLONE;
-
     // this is needed to prevent the parent exiting while setting up a new clone
-    safe_ptrace(PTRACE_SETOPTIONS, pid, NULL, (void*)ptrace_options);
+    safe_ptrace(PTRACE_SETOPTIONS, pid, NULL, (void*)context->ptrace_options);
 
-    // init context data
-    syshook_context_t* context = safe_calloc(1, sizeof(syshook_context_t));
-    context->pagesize = getpagesize();
-    list_initialize(&context->processes);
-    context->sys_call_table = sys_call_table;
-    context->ptrace_options = ptrace_options;
-    pthread_mutex_init(&context->lock, NULL);
+    // set thread_context
     thread_context = context;
 
     syshook_register_defaults(context);
@@ -927,7 +936,7 @@ char* syshook_strndup_user(syshook_process_t* process, const char __user *s, lon
     char* to = safe_calloc(1, n);
     syshook_strncpy_user(process, to, s, n);
     return to;
-} 
+}
 
 void* syshook_alloc_user(syshook_process_t* process, size_t size) {
     return (void*)syshook_invoke_syscall(process, SYS_mmap2, NULL, ROUNDUP(size, process->context->pagesize), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
