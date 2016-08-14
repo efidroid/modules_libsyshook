@@ -28,7 +28,7 @@
 
 typedef struct {
     int pagesize;
-    list_node_t processes;
+    syshook_list_node_t processes;
     void** sys_call_table;
     long ptrace_options;
 
@@ -37,7 +37,7 @@ typedef struct {
 
 typedef struct {
     // list
-    list_node_t node;
+    syshook_list_node_t node;
 
     // info
     syshook_context_t* context;
