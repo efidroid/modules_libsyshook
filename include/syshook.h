@@ -61,6 +61,7 @@ struct syshook_process {
     bool expect_syscall_exit;
     unsigned long clone_flags;
     void* exit_handler;
+    bool is_root_process;
 
     // status
     void* original_state;

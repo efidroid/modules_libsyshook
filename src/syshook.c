@@ -603,6 +603,7 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
     // register root process
     syshook_process_t* rootprocess = syshook_handle_new_process(context, pid, pid, -1, -1);
     rootprocess->sigstop_received = true;
+    rootprocess->is_root_process = true;
 
     // run callback
     if(context->create_process) {
