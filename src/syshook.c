@@ -91,7 +91,6 @@ syshook_process_t* syshook_handle_new_process(syshook_context_t* context, pid_t 
     process->state = safe_calloc(1, PLATFORM_STATE_SIZE);
     process->sigstop_received = false;
     pthread_mutex_init(&process->lock, NULL);
-    pthread_cond_init(&process->cond, NULL);
 
     pthread_mutex_lock(&context->lock);
     list_add_tail(&context->processes, &process->node);

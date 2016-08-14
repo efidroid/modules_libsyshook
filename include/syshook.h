@@ -70,7 +70,6 @@ struct syshook_process {
     // threading
     pthread_t thread;
     pthread_mutex_t lock;
-    pthread_cond_t cond;
     jmp_buf jmpbuf;
 
     long handler_context[10];
