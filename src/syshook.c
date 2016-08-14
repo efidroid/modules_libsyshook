@@ -32,7 +32,7 @@ static void syshook_continue(syshook_process_t* process, int signal) {
     safe_ptrace(PTRACE_SYSCALL, process->tid, 0, (void*)signal);
 }
 
-static syshook_process_t* get_process_data(syshook_context_t* context, pid_t tid) {
+syshook_process_t* get_process_data(syshook_context_t* context, pid_t tid) {
     pthread_mutex_lock(&context->lock);
     syshook_process_t *entry;
     list_for_every_entry(&context->processes, entry, syshook_process_t, node) {

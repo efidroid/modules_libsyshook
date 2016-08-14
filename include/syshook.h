@@ -107,4 +107,7 @@ long syshook_strncpy_user(syshook_process_t* process, char *to, const char __use
 void* syshook_alloc_user(syshook_process_t* process, size_t size);
 int syshook_free_user(syshook_process_t* process, void* addr, size_t size);
 
+syshook_process_t* get_process_data(syshook_context_t* context, pid_t tid);
+
+
 #endif // _SYSHOOK_H_
