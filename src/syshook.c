@@ -78,7 +78,7 @@ void syshook_thread_exit(int code) {
     safe_exit(code);
 }
 
-syshook_process_t* syshook_handle_new_process(syshook_context_t* context, pid_t pid, pid_t tid, pid_t ppid, pid_t cpid) {
+static syshook_process_t* syshook_handle_new_process(syshook_context_t* context, pid_t pid, pid_t tid, pid_t ppid, pid_t cpid) {
     syshook_process_t* process;
 
     process = safe_calloc(1, sizeof(syshook_process_t));

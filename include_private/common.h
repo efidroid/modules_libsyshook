@@ -51,8 +51,10 @@ static inline pid_t gettid(void);
 
 // logging
 //#define LOGE(fmt, ...) fprintf(stderr, "[%s:%u] " fmt, __func__, __LINE__, ##__VA_ARGS__)
-#define LOGE(fmt, ...) fprintf(stderr, "[%d:%d] " fmt, getpid(), gettid(), ##__VA_ARGS__); fflush(stderr);
-#define LOGD(fmt, ...)
+//#define LOGE(fmt, ...) fprintf(stderr, "[%d:%d] " fmt, getpid(), gettid(), ##__VA_ARGS__); fflush(stderr);
+//#define LOGD(fmt, ...) LOGE(fmt, ##__VA_ARGS__)
+#define LOGE(fmt, ...)
+#define LOGD LOGE
 
 #define INJECTION_DECLARE(name) \
     extern int name; \
@@ -81,7 +83,6 @@ typedef struct {
 } parsed_status_t;
 
 void syshook_parse_child_signal(pid_t pid, int status, parsed_status_t* pstatus);
-syshook_process_t* syshook_handle_new_process(syshook_context_t* context, pid_t pid, pid_t tid, pid_t ppid, pid_t cid);
 void syshook_register_defaults(syshook_context_t* context);
 void syshook_delete_process(syshook_process_t* process);
 syshook_context_t* syshook_get_thread_context(void);
