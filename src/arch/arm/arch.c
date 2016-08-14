@@ -162,21 +162,6 @@ void syshook_arch_set_pc(void* state, long pc) {
     pdata->lowargs_changed = true;
 }
 
-long syshook_arch_get_ip(void* state) {
-    syshook_internal_t* pdata = state;
-    const struct pt_regs* regs = (void*)pdata->regs;
-
-    return regs->ARM_ip;
-}
-
-void syshook_arch_set_ip(void* state, long ip) {
-    syshook_internal_t* pdata = state;
-    struct pt_regs* regs = (void*)pdata->regs;
-
-    regs->ARM_ip = ip;
-    pdata->lowargs_changed = true;
-}
-
 long syshook_arch_get_instruction_size(unsigned long instr) {
     return is_wide_instruction(instr)?4:2;
 }

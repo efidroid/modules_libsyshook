@@ -36,8 +36,6 @@ void syshook_arch_copy_state(void* dst, void* src);
 
 long syshook_arch_get_pc(void* state);
 void syshook_arch_set_pc(void* state, long pc);
-long syshook_arch_get_ip(void* state);
-void syshook_arch_set_ip(void* state, long ip);
 long syshook_arch_get_instruction_size(unsigned long instr);
 
 bool syshook_arch_is_entry(void* state);
