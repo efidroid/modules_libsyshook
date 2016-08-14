@@ -96,13 +96,6 @@ static syshook_process_t* syshook_handle_new_process(syshook_context_t* context,
     list_add_tail(&context->processes, &process->node);
     pthread_mutex_unlock(&context->lock);
 
-    if(context->create_process) {
-        int rc = context->create_process(process);
-        if(rc) {
-            safe_exit(1);
-        }
-    }
-
     LOGD("new process pid=%d tid=%d ppid=%d cpid=%d\n", pid, tid, ppid, cpid);
 
     return process;
@@ -441,6 +434,14 @@ static void syshook_handle_new_clone(syshook_context_t* context, syshook_process
     syshook_process_t* process = syshook_handle_new_process(context, clone_pid, clone_tid, clone_ppid, creator->tid);
     process->clone_flags = clone_flags;
 
+    // run callback
+    if(context->create_process) {
+        int rc = context->create_process(process);
+        if(rc) {
+            safe_exit(1);
+        }
+    }
+
     // wait for SIGSTOP
     safe_waitpid(process->tid, &status, __WALL);
     syshook_parse_child_signal(clone_tid, status, &parsed_status);
@@ -602,6 +603,14 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
     // register root process
     syshook_process_t* rootprocess = syshook_handle_new_process(context, pid, pid, -1, -1);
     rootprocess->sigstop_received = true;
+
+    // run callback
+    if(context->create_process) {
+        int rc = context->create_process(rootprocess);
+        if(rc) {
+            safe_exit(1);
+        }
+    }
 
     // continue child
     syshook_continue(rootprocess, 0);
