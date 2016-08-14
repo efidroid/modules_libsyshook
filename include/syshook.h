@@ -72,6 +72,9 @@ struct syshook_process {
     jmp_buf jmpbuf;
 
     long handler_context[10];
+
+    // pdata of libsyshook users
+    void* pdata;
 };
 
 // syshook init
