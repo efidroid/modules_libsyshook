@@ -20,6 +20,8 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <setjmp.h>
+#include <stdbool.h>
+#include <pthread.h>
 
 #include <syshook/list.h>
 #include <syshook/syscalls.h>
