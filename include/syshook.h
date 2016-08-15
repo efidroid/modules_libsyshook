@@ -90,7 +90,7 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...);
 bool syshook_is_entry(syshook_process_t* process);
 
 // argument modification
-void syshook_syscall_set(syshook_process_t* process, int scno);
+void syshook_syscall_set(syshook_process_t* process, long scno);
 long syshook_result_get(syshook_process_t* process);
 long syshook_argument_get(syshook_process_t* process, int num);
 void syshook_argument_set(syshook_process_t* process, int num, long value);

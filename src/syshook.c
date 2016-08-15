@@ -168,15 +168,15 @@ static void syshook_copy_state_diffs(void* dst, void* src) {
     }
 
     // restore scno
-    int scno_now = syshook_arch_syscall_get(dst);
-    int scno_backup = syshook_arch_syscall_get(src);
+    long scno_now = syshook_arch_syscall_get(dst);
+    long scno_backup = syshook_arch_syscall_get(src);
     if(scno_now!=scno_backup) {
         syshook_arch_syscall_set(dst, scno_backup);
     }
 
     // restore result
-    int rc_now = syshook_arch_result_get(dst);
-    int rc_backup = syshook_arch_result_get(src);
+    long rc_now = syshook_arch_result_get(dst);
+    long rc_backup = syshook_arch_result_get(src);
     if(rc_now!=rc_backup) {
         syshook_arch_result_set(dst, rc_backup);
     }
@@ -189,7 +189,7 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
     // copy state so we can modify it and still have a copy
     syshook_arch_copy_state(process->state, process->original_state);
 
-    int scno = syshook_arch_syscall_get(process->state);
+    long scno = syshook_arch_syscall_get(process->state);
     bool is_entry = syshook_arch_is_entry(process->state);
 
     // ignore this one and just continue
@@ -821,7 +821,7 @@ bool syshook_is_entry(syshook_process_t* process) {
     return syshook_arch_is_entry(process->state);
 }
 
-void syshook_syscall_set(syshook_process_t* process, int scno) {
+void syshook_syscall_set(syshook_process_t* process, long scno) {
     syshook_arch_syscall_set(process->state, scno);
 }
 

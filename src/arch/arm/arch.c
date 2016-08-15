@@ -166,14 +166,14 @@ long syshook_arch_get_instruction_size(unsigned long instr) {
     return is_wide_instruction(instr)?4:2;
 }
 
-int syshook_arch_syscall_get(void* state) {
+long syshook_arch_syscall_get(void* state) {
     syshook_internal_t* pdata = state;
     const struct pt_regs* regs = (void*)pdata->regs;
 
     return regs->ARM_r7;
 }
 
-void syshook_arch_syscall_set(void* state, int scno) {
+void syshook_arch_syscall_set(void* state, long scno) {
     syshook_internal_t* pdata = state;
     struct pt_regs* regs = (void*)pdata->regs;
 

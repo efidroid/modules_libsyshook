@@ -39,8 +39,8 @@ void syshook_arch_set_pc(void* state, long pc);
 long syshook_arch_get_instruction_size(unsigned long instr);
 
 bool syshook_arch_is_entry(void* state);
-int syshook_arch_syscall_get(void* state);
-void syshook_arch_syscall_set(void* state, int scno);
+long syshook_arch_syscall_get(void* state);
+void syshook_arch_syscall_set(void* state, long scno);
 long syshook_arch_argument_get(void* state, int num);
 void syshook_arch_argument_set(void* state, int num, long value);
 long syshook_arch_result_get(void* state);
