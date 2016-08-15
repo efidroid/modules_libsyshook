@@ -821,6 +821,11 @@ bool syshook_is_entry(syshook_process_t* process) {
     return syshook_arch_is_entry(process->state);
 }
 
+
+long syshook_syscall_get(syshook_process_t* process) {
+    return syshook_arch_syscall_get(process->state);
+}
+
 void syshook_syscall_set(syshook_process_t* process, long scno) {
     syshook_arch_syscall_set(process->state, scno);
 }
