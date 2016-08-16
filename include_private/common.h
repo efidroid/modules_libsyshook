@@ -76,10 +76,8 @@ typedef struct {
     // all
     int signal;
 
-    // clone, syscall
-    siginfo_t siginfo;
+    // clone
     unsigned long data;
-    int ptrace_event;
 } parsed_status_t;
 
 void syshook_parse_child_signal(pid_t pid, int status, parsed_status_t* pstatus);

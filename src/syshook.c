@@ -328,48 +328,50 @@ void syshook_parse_child_signal(pid_t tid, int status, parsed_status_t* pstatus)
 
     else if(WIFSTOPPED(status)) {
         signal = WSTOPSIG(status);
+        int event = status>>16;
 
-        if(signal == SIGTRAP) {
+        if(signal == (SIGTRAP|0x80)) {
+            pstatus->type = STATUS_TYPE_SYSCALL;
+            signal = 0;
+        }
+
+        else if(signal==SIGTRAP) {
             siginfo_t siginfo;
             unsigned long data;
 
-            safe_ptrace(PTRACE_GETSIGINFO, tid, NULL, &siginfo);
-            safe_ptrace(PTRACE_GETEVENTMSG, tid, NULL, &data);
-            
-            int event = siginfo.si_code>>8;
             switch(event) {
                 case PTRACE_EVENT_VFORK:
                 case PTRACE_EVENT_FORK:
                 case PTRACE_EVENT_CLONE:
+                    safe_ptrace(PTRACE_GETEVENTMSG, tid, NULL, &data);
                     LOGD("[%d][TRAP] event=%s clone_pid=%d\n", tid, ptraceevent2str(event), (pid_t)data);
+
+                    signal = 0;
                     pstatus->type = STATUS_TYPE_CLONE;
-                    break;
-
-                case PTRACE_EVENT_SECCOMP:
-                    LOGD("[%d][TRAP] event=%s seccomp\n", tid, ptraceevent2str(event));
-                    pstatus->type = STATUS_TYPE_OTHER;
-                    break;
-
-                case 0:
-                    pstatus->type = STATUS_TYPE_SYSCALL;
+                    pstatus->data = data;
                     break;
 
                 default:
-                    LOGE("[%d][TRAP] unknown event %d\n", tid, event);
-                    safe_exit(1);
+                    safe_ptrace(PTRACE_GETSIGINFO, tid, NULL, &siginfo);
+
+                    if(siginfo.si_code==SI_KERNEL || siginfo.si_code<=0) {
+                        pstatus->type = STATUS_TYPE_OTHER;
+
+                        // this seems to happen once for each process
+                        if(siginfo.si_code==0) {
+                            signal = 0;
+                        }
+                    }
+                    else {
+                        LOGE("[%d][TRAP] unknown event %d\n", tid, event);
+                        safe_exit(1);
+                    }
             }
-
-            // suppress signal
-            signal = 0;
-
-            pstatus->siginfo = siginfo;
-            pstatus->data = data;
-            pstatus->ptrace_event = event;
         }
 
-        else {
-            LOGD("[%d] stopped with %s\n", tid, sig2str(signal));
+        if(signal!=0) {
             pstatus->type = STATUS_TYPE_OTHER;
+            LOGD("[%d] stopped with %s 0x%08x\n", tid, sig2str(signal), signal);
         }
     }
 
@@ -540,6 +542,7 @@ syshook_context_t* syshook_create_context(void** sys_call_table) {
     ptrace_options |= PTRACE_O_TRACEFORK;
     ptrace_options |= PTRACE_O_TRACEVFORK;
     ptrace_options |= PTRACE_O_TRACECLONE;
+    ptrace_options |= PTRACE_O_TRACESYSGOOD;
 
     syshook_context_t* context = calloc(1, sizeof(syshook_context_t));
     context->pagesize = getpagesize();
