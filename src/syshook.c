@@ -217,7 +217,7 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
         return 0;
     }
 
-    //LOGD("[%d:%d][SYSCALL][%s] %d\n", process->pid, process->tid, is_entry?"ENTRY":"EXIT", scno);
+    //LOGD("[%d:%d][SYSCALL][%s] %ld\n", process->pid, process->tid, is_entry?"ENTRY":"EXIT", scno);
 
     if(!is_entry && !process->exit_handler) {
         LOGE("received exit but no exit handler is set\n");
