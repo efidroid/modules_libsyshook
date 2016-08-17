@@ -20,4 +20,5 @@ add_library(syshook
 include_directories(
     include
     include_private
+    ${TARGET_MULTIBOOT_SRC}/include
 )

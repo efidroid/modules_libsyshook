@@ -33,6 +33,9 @@
 #include <syshook.h>
 #include <syshook/private/arch.h>
 
+#define LOG_TAG "LIBSYSHOOK"
+#include <lib/log.h>
+
 static inline pid_t gettid(void);
 
 // common macros
@@ -48,13 +51,6 @@ static inline pid_t gettid(void);
             n   -= bytes; \
         } \
     }
-
-// logging
-//#define LOGE(fmt, ...) fprintf(stderr, "[%s:%u] " fmt, __func__, __LINE__, ##__VA_ARGS__)
-//#define LOGE(fmt, ...) fprintf(stderr, "[%d:%d] " fmt, getpid(), gettid(), ##__VA_ARGS__); fflush(stderr);
-//#define LOGD(fmt, ...) LOGE(fmt, ##__VA_ARGS__)
-#define LOGE(fmt, ...)
-#define LOGD LOGE
 
 #define INJECTION_DECLARE(name) \
     extern int name; \
