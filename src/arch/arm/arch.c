@@ -52,8 +52,7 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
         unsigned long instr;
         long pc = syshook_arch_get_pc(state);
         if(syshook_copy_from_user(process, &instr, (void*)pc, sizeof(instr))) {
-            LOGE("can't read instruction at PC\n");
-            safe_exit(1);
+            LOGF("can't read instruction at PC\n");
         }
 
         // change scno to getpid
@@ -80,8 +79,7 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
                 break;
 
             default:
-                LOGE("invalid status\n");
-                safe_exit(1);
+                LOGF("invalid status\n");
         }
 
         // set registers
@@ -110,8 +108,7 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
                 break;
 
             default:
-                LOGE("invalid status\n");
-                safe_exit(1);
+                LOGF("invalid status\n");
         }
 
         // restore regs
@@ -195,8 +192,8 @@ long syshook_arch_argument_get(void* state, int num) {
         case 5: return regs->ARM_r5;
         case 6: return regs->ARM_r6;
         default:
-            LOGE("Invalid argument number %d\n", num);
-            safe_exit(1);
+            LOGF("Invalid argument number %d\n", num);
+            return -1;
     }
 }
 
@@ -213,8 +210,7 @@ void syshook_arch_argument_set(void* state, int num, long value) {
         case 5: regs->ARM_r5 = value; break;
         case 6: regs->ARM_r6 = value; break;
         default:
-            LOGE("Invalid argument number %d\n", num);
-            safe_exit(1);
+            LOGF("Invalid argument number %d\n", num);
     }
 
     if(num<=3) {
@@ -259,8 +255,7 @@ void syshook_arch_setup_process_trap(syshook_process_t* process) {
     // allocate child memory
     void __user *mem = (void*)syshook_invoke_syscall(process, SYS_mmap2, NULL, mem_size_rounded, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
     if(mem==NULL) {
-        LOGE("can't allocate child memory\n");
-        safe_exit(1);
+        LOGF("can't allocate child memory\n");
     }
 
     // copy inj_trap code

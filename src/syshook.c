@@ -70,12 +70,14 @@ syshook_context_t* syshook_get_thread_context(void) {
 }
 
 void syshook_thread_exit(int code) {
+
     syshook_process_t* process = get_thread_process();
     if(process) {
+        if(process->is_root_process)
+            return;
+
         longjmp(process->jmpbuf, code);
     }
-
-    safe_exit(code);
 }
 
 static syshook_process_t* syshook_handle_new_process(syshook_context_t* context, pid_t pid, pid_t tid, pid_t ppid, pid_t cpid) {
@@ -117,7 +119,7 @@ void syshook_delete_process(syshook_process_t* process) {
     if(process->context->destroy_process) {
         int rc = process->context->destroy_process(process);
         if(rc) {
-            safe_exit(1);
+            LOGF("error in destroy_process\n");
         }
     }
 
@@ -199,7 +201,7 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
         if(process->context->execve_process) {
             int rc = process->context->execve_process(process);
             if(rc) {
-                safe_exit(1);
+                LOGF("error in execve_process\n");
             }
         }
 
@@ -220,8 +222,7 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
     //LOGD("[%d:%d][SYSCALL][%s] %ld\n", process->pid, process->tid, is_entry?"ENTRY":"EXIT", scno);
 
     if(!is_entry && !process->exit_handler) {
-        LOGE("received exit but no exit handler is set\n");
-        safe_exit(1);
+        LOGF("received exit but no exit handler is set\n");
     }
 
     // apparently, the exit did not happen
@@ -237,8 +238,7 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
         // call handler again later if/when the syscall returns
         if(process->exit_handler) {
             if(!syshook_arch_is_entry(process->state)) {
-                LOGE("exit_handler is set, but process is in exit state already");
-                safe_exit(1);
+                LOGF("exit_handler is set, but process is in exit state already");
             }
 
             // copy new state to process
@@ -291,8 +291,7 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
                 return -1;
 
             default:
-                LOGE("invalid child status during syscall: %d\n", parsed_status.type);
-                safe_exit(1);
+                LOGF("invalid child status during syscall: %d\n", parsed_status.type);
         }
     }
 
@@ -363,8 +362,7 @@ void syshook_parse_child_signal(pid_t tid, int status, parsed_status_t* pstatus)
                         }
                     }
                     else {
-                        LOGE("[%d][TRAP] unknown event %d\n", tid, event);
-                        safe_exit(1);
+                        LOGF("[%d][TRAP] unknown event %d\n", tid, event);
                     }
             }
         }
@@ -381,8 +379,7 @@ void syshook_parse_child_signal(pid_t tid, int status, parsed_status_t* pstatus)
     }
 
     else {
-        LOGE("[%d] unknown status 0x%x\n", tid, status);
-        safe_exit(1);
+        LOGF("[%d] unknown status 0x%x\n", tid, status);
     }
 
     pstatus->signal = signal;
@@ -440,7 +437,7 @@ static void syshook_handle_new_clone(syshook_context_t* context, syshook_process
     if(context->create_process) {
         int rc = context->create_process(process);
         if(rc) {
-            safe_exit(1);
+            LOGF("error in create_process\n");
         }
     }
 
@@ -449,6 +446,7 @@ static void syshook_handle_new_clone(syshook_context_t* context, syshook_process
     syshook_parse_child_signal(clone_tid, status, &parsed_status);
     if(!(parsed_status.type==STATUS_TYPE_OTHER && parsed_status.signal==SIGSTOP)) {
         syshook_thread_exit(1);
+        LOGF("status error in main thread\n");
     }
 
     // get state
@@ -486,8 +484,7 @@ static void syshook_handle_child_signal(syshook_context_t* context, pid_t tid, i
 
         case STATUS_TYPE_SYSCALL:
             if(!process) {
-                LOGE("received syscall from unknown child\n");
-                safe_exit(1);
+                LOGF("received syscall from unknown child\n");
             }
 
             if(syshook_handle_child_syscall(process)==0) {
@@ -497,8 +494,7 @@ static void syshook_handle_child_signal(syshook_context_t* context, pid_t tid, i
             
         case STATUS_TYPE_OTHER:
             if(!process) {
-                LOGE("received signal from unknown child\n");
-                safe_exit(1);
+                LOGF("received signal from unknown child\n");
             }
 
             if(!process->sigstop_received && parsed_status.signal==SIGSTOP) {
@@ -527,8 +523,7 @@ static void syshook_handle_child_signal(syshook_context_t* context, pid_t tid, i
             break;
 
         default:
-            LOGE("unknown status: %u\n", parsed_status.type);
-            safe_exit(1);
+            LOGF("unknown status: %u\n", parsed_status.type);
             break;
     }
 }
@@ -580,8 +575,7 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
         // run binary
         execvp(argv[0], argv);
 
-        perror("execvp");
-        safe_exit(1);
+        LOGF("execvp: %s\n", strerror(errno));
     }
 
     // parent
@@ -591,8 +585,7 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
 
     // parse status
     if (WSTOPSIG(status) != SIGTRAP) {
-        LOGE("invalid root child status\n");
-        safe_exit(1);
+        LOGF("invalid root child status\n");
     }
 
     // this is needed to prevent the parent exiting while setting up a new clone
@@ -612,7 +605,7 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
     if(context->create_process) {
         int rc = context->create_process(rootprocess);
         if(rc) {
-            safe_exit(1);
+            LOGF("error in create_process\n");
         }
     }
 
@@ -660,8 +653,7 @@ long syshook_invoke_hookee(syshook_process_t* process) {
     int status;
 
     if(!syshook_arch_is_entry(process->state)) {
-        LOGE("%s: child is not in entry state\n", __func__);
-        safe_exit(1);
+        LOGF("%s: child is not in entry state\n", __func__);
     }
 
     // copy new state to process
@@ -689,8 +681,8 @@ long syshook_invoke_hookee(syshook_process_t* process) {
             return syshook_arch_result_get(process->state);
 
         default:
-            LOGE("%s: invalid status: %d\n", __func__, parsed_status.type);
-            safe_exit(1);
+            LOGF("%s: invalid status: %d\n", __func__, parsed_status.type);
+            return -1;
     }
 }
 
@@ -704,8 +696,7 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
     bool was_entry = syshook_arch_is_entry(process->state);
 
     if(syshook_copy_from_user(process, &instr, (void*)pc, sizeof(instr))) {
-        LOGE("can't read instruction at PC\n");
-        safe_exit(1);
+        LOGF("can't read instruction at PC\n");
     }
 
     // backup state
@@ -736,8 +727,7 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
                 break;
 
             default:
-                LOGE("%s: invalid status: %d\n", __func__, parsed_status.type);
-                safe_exit(1);
+                LOGF("%s: invalid status: %d\n", __func__, parsed_status.type);
         }
     }
 
@@ -778,8 +768,7 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
             break;
 
         default:
-            LOGE("%s: invalid status: %d\n", __func__, parsed_status.type);
-            safe_exit(1);
+            LOGF("%s: invalid status: %d\n", __func__, parsed_status.type);
     }
 
     // get result
@@ -809,8 +798,7 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
                 break;
 
             default:
-            LOGE("%s: invalid status: %d\n", __func__, parsed_status.type);
-            safe_exit(1);
+                LOGF("%s: invalid status: %d\n", __func__, parsed_status.type);
         }
     }
 

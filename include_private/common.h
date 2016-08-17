@@ -36,8 +36,6 @@
 #define LOG_TAG "LIBSYSHOOK"
 #include <lib/log.h>
 
-static inline pid_t gettid(void);
-
 // common macros
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(*(a)))
 #define ROUNDUP(a, b) (((a) + ((b)-1)) & ~((b)-1))
@@ -206,17 +204,10 @@ static inline size_t cloneflags2str(char* buf, size_t bufsz, long clone_flags){
 
 // safety wrappers
 
-static inline __attribute__((noreturn)) void safe_exit(int status) {
-    LOGD("EXIT\n");
-    exit(status);
-    for(;;);
-}
-
 static inline pid_t safe_fork(void) {
     pid_t pid = fork();
     if(pid<0) {
-        LOGE("fork: %s\n", strerror(-pid));
-        safe_exit(1);
+        LOGF("fork: %s\n", strerror(errno));
     }
 
     return pid;
@@ -238,8 +229,7 @@ static inline long safe_ptrace(enum __ptrace_request request, pid_t pid,
             }
         }
 
-        LOGE("ptrace(%s, %d, %p, %p): %s\n", ptracerequest2str(request), pid, addr, data, strerror(errno));
-        safe_exit(1);
+        LOGF("ptrace(%s, %d, %p, %p): %s\n", ptracerequest2str(request), pid, addr, data, strerror(errno));
     }
 
     return ret;
@@ -250,8 +240,7 @@ static inline pid_t safe_waitpid(pid_t pid, int *stat_loc, int options) {
 
     pid_t ret = waitpid(pid, stat_loc, options);
     if(ret==-1 || (pid!=-1 && ret!=pid)) {
-        perror("waitpid");
-        safe_exit(1);
+        LOGF("waitpid: %s\n", strerror(errno));
     }
 
     return ret;
@@ -260,8 +249,7 @@ static inline pid_t safe_waitpid(pid_t pid, int *stat_loc, int options) {
 static inline void* safe_malloc(size_t size) {
     void* mem = malloc(size);
     if(!mem) {
-        perror("malloc");
-        safe_exit(1);
+        LOGF("malloc: %s\n", strerror(errno));
     }
 
     return mem;
@@ -270,15 +258,10 @@ static inline void* safe_malloc(size_t size) {
 static inline void* safe_calloc(size_t num, size_t size) {
     void* mem = calloc(num, size);
     if(!mem) {
-        perror("calloc");
-        safe_exit(1);
+        LOGF("calloc: %s\n", strerror(errno));
     }
 
     return mem;
-}
-
-static inline pid_t gettid(void) {
-    return (pid_t)syscall(SYS_gettid);
 }
 
 #endif
