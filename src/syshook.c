@@ -24,7 +24,7 @@
 #include <common.h>
 #include <syshook.h>
 
-static __thread syshook_context_t* thread_context = NULL;
+static __thread syshook_process_t* thread_process = NULL;
 
 static void syshook_handle_child_signal(syshook_context_t* context, pid_t tid, int status);
 
@@ -32,7 +32,7 @@ static void syshook_continue(syshook_process_t* process, int signal) {
     safe_ptrace(PTRACE_SYSCALL, process->tid, 0, (void*)signal);
 }
 
-syshook_process_t* get_process_data(syshook_context_t* context, pid_t tid) {
+syshook_process_t* get_process_by_tid(syshook_context_t* context, pid_t tid) {
     pthread_mutex_lock(&context->lock);
     syshook_process_t *entry;
     list_for_every_entry(&context->processes, entry, syshook_process_t, node) {
@@ -47,35 +47,13 @@ syshook_process_t* get_process_data(syshook_context_t* context, pid_t tid) {
 }
 
 syshook_process_t* get_thread_process(void) {
-    syshook_context_t* context = syshook_get_thread_context();
-    if(!context) return NULL;
-
-    pthread_t self = pthread_self();
-
-    pthread_mutex_lock(&context->lock);
-    syshook_process_t *entry;
-    list_for_every_entry(&context->processes, entry, syshook_process_t, node) {
-        if(entry->thread==self) {
-            pthread_mutex_unlock(&context->lock);
-            return entry;
-        }
-    }
-    pthread_mutex_unlock(&context->lock);
-
-    return NULL;
-}
-
-syshook_context_t* syshook_get_thread_context(void) {
-    return thread_context;
+    return thread_process;
 }
 
 void syshook_thread_exit(int code) {
 
     syshook_process_t* process = get_thread_process();
     if(process) {
-        if(process->is_root_process)
-            return;
-
         longjmp(process->jmpbuf, code);
     }
 }
@@ -389,7 +367,7 @@ static void* syshook_child_thread(void* pdata) {
     syshook_process_t* process = pdata;
     int status;
 
-    thread_context = process->context;
+    thread_process = process;
 
     int rc = setjmp(process->jmpbuf);
     if(rc) {
@@ -403,7 +381,9 @@ static void* syshook_child_thread(void* pdata) {
     while(!process->stopped) {
         // wait for change
         pid_t tid = safe_waitpid(process->tid, &status, __WALL);
-
+        if(tid!=process->tid) {
+            LOGF("got status from wrong process\n");
+        }
         syshook_handle_child_signal(process->context, tid, status);
     }
 
@@ -469,7 +449,11 @@ static void syshook_handle_new_clone(syshook_context_t* context, syshook_process
 static void syshook_handle_child_signal(syshook_context_t* context, pid_t tid, int status) {
     parsed_status_t parsed_status;
 
-    syshook_process_t* process = get_process_data(context, tid);
+    syshook_process_t* process = get_thread_process();
+
+    if(!process) {
+        LOGF("no thread process found\n");
+    }
 
     syshook_parse_child_signal(tid, status, &parsed_status);
     switch(parsed_status.type) {
@@ -483,20 +467,12 @@ static void syshook_handle_child_signal(syshook_context_t* context, pid_t tid, i
             break;
 
         case STATUS_TYPE_SYSCALL:
-            if(!process) {
-                LOGF("received syscall from unknown child\n");
-            }
-
             if(syshook_handle_child_syscall(process)==0) {
                 syshook_continue(process, 0);
             }
             break;
             
         case STATUS_TYPE_OTHER:
-            if(!process) {
-                LOGF("received signal from unknown child\n");
-            }
-
             if(!process->sigstop_received && parsed_status.signal==SIGSTOP) {
                 LOGD("got first sigstop\n");
                 process->sigstop_received = true;
@@ -557,7 +533,7 @@ int syshook_execvp(char **argv, void** sys_call_table) {
 int syshook_execvp_ex(syshook_context_t* context, char **argv) {
     int status;
 
-    if(thread_context) {
+    if(thread_process) {
         return -1;
     }
 
@@ -591,9 +567,6 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
     // this is needed to prevent the parent exiting while setting up a new clone
     safe_ptrace(PTRACE_SETOPTIONS, pid, NULL, (void*)context->ptrace_options);
 
-    // set thread_context
-    thread_context = context;
-
     syshook_register_defaults(context);
 
     // register root process
@@ -601,9 +574,18 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
     rootprocess->sigstop_received = true;
     rootprocess->is_root_process = true;
 
+    // set thread_process
+    thread_process = rootprocess;
+
+    // set error handler
+    int rc = setjmp(rootprocess->jmpbuf);
+    if(rc) {
+        LOGF("MAIN thread error\n");
+    }
+
     // run callback
     if(context->create_process) {
-        int rc = context->create_process(rootprocess);
+        rc = context->create_process(rootprocess);
         if(rc) {
             LOGF("error in create_process\n");
         }
@@ -616,7 +598,9 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
     while(!rootprocess->stopped) {
         // wait for change
         pid_t tid = safe_waitpid(pid, &status, __WALL);
-
+        if(tid!=rootprocess->tid) {
+            LOGF("got status from wrong process\n");
+        }
         syshook_handle_child_signal(context, tid, status);
     }
     syshook_delete_process(rootprocess);
@@ -645,7 +629,7 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
 
     LOGD("ALL CHILDREN FINISHED\n");
 
-    thread_context = NULL;
+    thread_process = NULL;
     return 0;
 }
 
