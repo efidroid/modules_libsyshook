@@ -394,6 +394,7 @@ stopthread:
 }
 
 static void syshook_handle_new_clone(syshook_context_t* context, syshook_process_t* creator, pid_t clone_tid) {
+    int rc;
     int status;
     parsed_status_t parsed_status;
 
@@ -415,7 +416,7 @@ static void syshook_handle_new_clone(syshook_context_t* context, syshook_process
 
     // run callback
     if(context->create_process) {
-        int rc = context->create_process(process);
+        rc = context->create_process(process);
         if(rc) {
             LOGF("error in create_process\n");
         }
@@ -442,8 +443,27 @@ static void syshook_handle_new_clone(syshook_context_t* context, syshook_process
     // detach
     safe_ptrace(PTRACE_DETACH, process->tid, 0, 0);
 
+    // attr init
+    pthread_attr_t attr;
+    rc = pthread_attr_init(&attr);
+    if(rc) {
+        LOGF("can't initialize pthread attributes: %s\n", strerror(rc));
+    }
+
+    // detached state
+    rc = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    if(rc) {
+        LOGF("can't set detached state attribute: %s\n", strerror(rc));
+    }
+
     // start thread
-    pthread_create(&(process->thread), NULL, syshook_child_thread, process);
+    rc = pthread_create(&(process->thread), &attr, syshook_child_thread, process);
+    if(rc) {
+        LOGF("can't create pthread: %s\n", strerror(rc));
+    }
+
+    // cleanup
+    pthread_attr_destroy(&attr);
 }
 
 static void syshook_handle_child_signal(syshook_context_t* context, pid_t tid, int status) {
