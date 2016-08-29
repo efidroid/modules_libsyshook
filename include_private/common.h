@@ -192,10 +192,7 @@ static inline long safe_ptrace(enum __ptrace_request request, pid_t pid,
     if(errno) {
         // No such process
         if(errno==ESRCH) {
-            syshook_process_t* process = get_thread_process();
-            if(process) {
-                longjmp(process->jmpbuf, 1);
-            }
+            syshook_thread_exit(1);
         }
 
         LOGF("ptrace(%s, %d, %p, %p): %s\n", ptracerequest2str(request), pid, addr, data, strerror(errno));
