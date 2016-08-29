@@ -339,8 +339,8 @@ void syshook_parse_child_signal(pid_t tid, int status, parsed_status_t* pstatus)
                     if(siginfo.si_code==SI_KERNEL || siginfo.si_code<=0) {
                         pstatus->type = STATUS_TYPE_OTHER;
 
-                        // this seems to happen once for each process
-                        if(siginfo.si_code==0) {
+                        // this happens after execve if PTRACE_O_TRACEEXEC is disabled
+                        if(siginfo.si_code==SI_USER) {
                             signal = 0;
                         }
                     }
