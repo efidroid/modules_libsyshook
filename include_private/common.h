@@ -170,38 +170,6 @@ static inline const char *ptracerequest2str(enum __ptrace_request request){
     }
 }
 
-static inline size_t cloneflags2str(char* buf, size_t bufsz, long clone_flags){
-    size_t bufsz_left = bufsz;
-
-    snprintf(buf, bufsz, "0");
-    buf+=1;
-    bufsz_left-=1;
-
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_CHILD_CLEARTID);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_CHILD_SETTID);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_FILES);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_FS);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_IO);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_NEWIPC);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_NEWNET);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_NEWNS);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_NEWPID);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_NEWUSER);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_NEWUTS);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_PARENT);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_PARENT_SETTID);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_PTRACE);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_SETTLS);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_SIGHAND);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_SYSVSEM);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_THREAD);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_UNTRACED);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_VFORK);
-    STRFLAGCPY(buf, bufsz_left, clone_flags, CLONE_VM);
-
-    return (bufsz - bufsz_left);
-}
-
 // safety wrappers
 
 static inline pid_t safe_fork(void) {
