@@ -26,7 +26,7 @@
 
 static __thread syshook_process_t* thread_process = NULL;
 
-static void syshook_handle_child_signal(syshook_context_t* context, pid_t tid, int status);
+static void syshook_handle_child_signal(syshook_process_t* process, int status);
 
 static void syshook_continue(syshook_process_t* process, int signal) {
     safe_ptrace(PTRACE_SYSCALL, process->tid, 0, (void*)signal);
@@ -389,7 +389,7 @@ static void* syshook_child_thread(void* pdata) {
         if(tid!=process->tid) {
             LOGF("got status from wrong process\n");
         }
-        syshook_handle_child_signal(process->context, tid, status);
+        syshook_handle_child_signal(process, status);
     }
 
 stopthread:
@@ -469,23 +469,17 @@ static void syshook_handle_new_clone(syshook_context_t* context, syshook_process
     pthread_attr_destroy(&attr);
 }
 
-static void syshook_handle_child_signal(syshook_context_t* context, pid_t tid, int status) {
+
+static void syshook_handle_child_signal(syshook_process_t* process, int status) {
     parsed_status_t parsed_status;
-
-    syshook_process_t* process = get_thread_process();
-
-    if(!process) {
-        LOGF("no thread process found\n");
-    }
-
-    syshook_parse_child_signal(tid, status, &parsed_status);
+    syshook_parse_child_signal(process->tid, status, &parsed_status);
     switch(parsed_status.type) {
         case STATUS_TYPE_EXIT:
             syshook_handle_stop_process(process);
             break;
 
         case STATUS_TYPE_CLONE:
-            syshook_handle_new_clone(context, process, (pid_t)parsed_status.data);
+            syshook_handle_new_clone(process->context, process, (pid_t)parsed_status.data);
             syshook_continue(process, 0);
             break;
 
@@ -501,7 +495,7 @@ static void syshook_handle_child_signal(syshook_context_t* context, pid_t tid, i
                 process->sigstop_received = true;
 
                 // set options
-                safe_ptrace(PTRACE_SETOPTIONS, process->tid, NULL, (void*)context->ptrace_options);
+                safe_ptrace(PTRACE_SETOPTIONS, process->tid, NULL, (void*)process->context->ptrace_options);
 
                 // get state
                 syshook_arch_get_state(process, process->state);
@@ -624,7 +618,7 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
         if(tid!=rootprocess->tid) {
             LOGF("got status from wrong process\n");
         }
-        syshook_handle_child_signal(context, tid, status);
+        syshook_handle_child_signal(rootprocess, status);
     }
     syshook_delete_process(rootprocess);
 
