@@ -26,7 +26,7 @@
 
 static __thread syshook_process_t* thread_process = NULL;
 
-static void syshook_handle_child_signal(syshook_process_t* process, int status);
+static void syshook_handle_child_signal(syshook_process_t* process, parsed_status_t* parsed_status);
 
 static void syshook_continue(syshook_process_t* process, int signal) {
     safe_ptrace(PTRACE_SYSCALL, process->tid, 0, (void*)signal);
@@ -36,7 +36,11 @@ void syshook_wait_for_signal(syshook_process_t* process, parsed_status_t* parsed
     int status = 0;
 
     // wait for signal
-    safe_waitpid(process->tid, &status, __WALL);
+    pid_t ret = safe_waitpid(process->tid, &status, __WALL);
+
+    if(ret!=process->tid) {
+        LOGF("got status from wrong process\n");
+    }
 
     // parse status
     syshook_parse_child_signal(process->tid, status, parsed_status);
@@ -370,7 +374,7 @@ void syshook_parse_child_signal(pid_t tid, int status, parsed_status_t* pstatus)
 
 static void* syshook_child_thread(void* pdata) {
     syshook_process_t* process = pdata;
-    int status;
+    parsed_status_t parsed_status;
 
     thread_process = process;
 
@@ -384,12 +388,8 @@ static void* syshook_child_thread(void* pdata) {
 
     // main loop
     while(!process->stopped) {
-        // wait for change
-        pid_t tid = safe_waitpid(process->tid, &status, __WALL);
-        if(tid!=process->tid) {
-            LOGF("got status from wrong process\n");
-        }
-        syshook_handle_child_signal(process, status);
+        syshook_wait_for_signal(process, &parsed_status);
+        syshook_handle_child_signal(process, &parsed_status);
     }
 
 stopthread:
@@ -470,16 +470,14 @@ static void syshook_handle_new_clone(syshook_context_t* context, syshook_process
 }
 
 
-static void syshook_handle_child_signal(syshook_process_t* process, int status) {
-    parsed_status_t parsed_status;
-    syshook_parse_child_signal(process->tid, status, &parsed_status);
-    switch(parsed_status.type) {
+static void syshook_handle_child_signal(syshook_process_t* process, parsed_status_t* parsed_status) {
+    switch(parsed_status->type) {
         case STATUS_TYPE_EXIT:
             syshook_handle_stop_process(process);
             break;
 
         case STATUS_TYPE_CLONE:
-            syshook_handle_new_clone(process->context, process, (pid_t)parsed_status.data);
+            syshook_handle_new_clone(process->context, process, (pid_t)parsed_status->data);
             syshook_continue(process, 0);
             break;
 
@@ -490,7 +488,7 @@ static void syshook_handle_child_signal(syshook_process_t* process, int status) 
             break;
             
         case STATUS_TYPE_OTHER:
-            if(!process->sigstop_received && parsed_status.signal==SIGSTOP) {
+            if(!process->sigstop_received && parsed_status->signal==SIGSTOP) {
                 LOGD("got first sigstop\n");
                 process->sigstop_received = true;
 
@@ -511,12 +509,12 @@ static void syshook_handle_child_signal(syshook_process_t* process, int status) 
             }
             else {
                 // pass through unknown signals
-                syshook_continue(process, parsed_status.signal);
+                syshook_continue(process, parsed_status->signal);
             }
             break;
 
         default:
-            LOGF("unknown status: %u\n", parsed_status.type);
+            LOGF("unknown status: %u\n", parsed_status->type);
             break;
     }
 }
@@ -549,6 +547,7 @@ int syshook_execvp(char **argv, void** sys_call_table) {
 
 int syshook_execvp_ex(syshook_context_t* context, char **argv) {
     int status;
+    parsed_status_t parsed_status;
 
     if(thread_process) {
         return -1;
@@ -613,12 +612,8 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
 
     // main loop
     while(!rootprocess->stopped) {
-        // wait for change
-        pid_t tid = safe_waitpid(pid, &status, __WALL);
-        if(tid!=rootprocess->tid) {
-            LOGF("got status from wrong process\n");
-        }
-        syshook_handle_child_signal(rootprocess, status);
+        syshook_wait_for_signal(rootprocess, &parsed_status);
+        syshook_handle_child_signal(rootprocess, &parsed_status);
     }
     syshook_delete_process(rootprocess);
 
