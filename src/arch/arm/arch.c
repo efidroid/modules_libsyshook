@@ -41,7 +41,6 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
     if(pdata->highargs_changed && syshook_arch_is_entry(state)) {
         //LOGD("apply highregs\n");
 
-        int status;
         parsed_status_t parsed_status;
 
         // backup regs
@@ -66,10 +65,7 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
         safe_ptrace(PTRACE_SYSCALL, process->tid, 0, (void*)0);
 
         // wait for EXIT
-        safe_waitpid(process->tid, &status, __WALL);
-
-        // parse status
-        syshook_parse_child_signal(process->tid, status, &parsed_status);
+        syshook_wait_for_signal(process, &parsed_status);
 
         // verify status
         switch(parsed_status.type) {
@@ -95,10 +91,7 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
         safe_ptrace(PTRACE_SYSCALL, process->tid, 0, (void*)0);
 
         // wait for ENTRY
-        safe_waitpid(process->tid, &status, __WALL);
-
-        // parse status
-        syshook_parse_child_signal(process->tid, status, &parsed_status);
+        syshook_wait_for_signal(process, &parsed_status);
 
         // verify status
         switch(parsed_status.type) {

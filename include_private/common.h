@@ -74,6 +74,7 @@ typedef struct {
     unsigned long data;
 } parsed_status_t;
 
+void syshook_wait_for_signal(syshook_process_t* process, parsed_status_t* parsed_status);
 void syshook_parse_child_signal(pid_t pid, int status, parsed_status_t* pstatus);
 void syshook_register_defaults(syshook_context_t* context);
 void syshook_delete_process(syshook_process_t* process);

@@ -32,6 +32,16 @@ static void syshook_continue(syshook_process_t* process, int signal) {
     safe_ptrace(PTRACE_SYSCALL, process->tid, 0, (void*)signal);
 }
 
+void syshook_wait_for_signal(syshook_process_t* process, parsed_status_t* parsed_status) {
+    int status = 0;
+
+    // wait for signal
+    safe_waitpid(process->tid, &status, __WALL);
+
+    // parse status
+    syshook_parse_child_signal(process->tid, status, parsed_status);
+}
+
 syshook_process_t* get_process_by_tid(syshook_context_t* context, pid_t tid) {
     pthread_mutex_lock(&context->lock);
     syshook_process_t *entry;
@@ -240,8 +250,6 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
     // make sure we leave this function with the child in EXIT
     is_entry = syshook_arch_is_entry(process->state);
     if(is_entry) {
-        int status;
-
         // copy new state to process
         syshook_arch_set_state(process, process->state);
 
@@ -249,11 +257,8 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
         syshook_continue(process, 0);
 
         // wait for EXIT
-        safe_waitpid(process->tid, &status, __WALL);
-
-        // parse status
         parsed_status_t parsed_status;
-        syshook_parse_child_signal(process->tid, status, &parsed_status);
+        syshook_wait_for_signal(process, &parsed_status);
 
         // verify status
         switch(parsed_status.type) {
@@ -395,7 +400,6 @@ stopthread:
 
 static void syshook_handle_new_clone(syshook_context_t* context, syshook_process_t* creator, pid_t clone_tid) {
     int rc;
-    int status;
     parsed_status_t parsed_status;
 
     // register process
@@ -423,8 +427,7 @@ static void syshook_handle_new_clone(syshook_context_t* context, syshook_process
     }
 
     // wait for SIGSTOP
-    safe_waitpid(process->tid, &status, __WALL);
-    syshook_parse_child_signal(clone_tid, status, &parsed_status);
+    syshook_wait_for_signal(process, &parsed_status);
     if(!(parsed_status.type==STATUS_TYPE_OTHER && parsed_status.signal==SIGSTOP)) {
         syshook_thread_exit(1);
         LOGF("status error in main thread\n");
@@ -654,8 +657,6 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
 }
 
 long syshook_invoke_hookee(syshook_process_t* process) {
-    int status;
-
     if(!syshook_arch_is_entry(process->state)) {
         LOGF("%s: child is not in entry state\n", __func__);
     }
@@ -666,12 +667,9 @@ long syshook_invoke_hookee(syshook_process_t* process) {
     // continue
     syshook_continue(process, 0);
 
-    // wait for EXIT
-    safe_waitpid(process->tid, &status, __WALL);
-
-    // parse status
+    // wait for signal
     parsed_status_t parsed_status;
-    syshook_parse_child_signal(process->tid, status, &parsed_status);
+    syshook_wait_for_signal(process, &parsed_status);
 
     // verify status
     switch(parsed_status.type) {
@@ -691,7 +689,6 @@ long syshook_invoke_hookee(syshook_process_t* process) {
 }
 
 long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
-    int status;
     int i;
     parsed_status_t parsed_status;
     uint8_t* state[PLATFORM_STATE_SIZE];
@@ -718,10 +715,7 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
         syshook_continue(process, 0);
 
         // wait for ENTRY
-        safe_waitpid(process->tid, &status, __WALL);
-
-        // parse status
-        syshook_parse_child_signal(process->tid, status, &parsed_status);
+        syshook_wait_for_signal(process, &parsed_status);
 
         // verify status
         switch(parsed_status.type) {
@@ -755,10 +749,7 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
     syshook_continue(process, 0);
 
     // wait for EXIT
-    safe_waitpid(process->tid, &status, __WALL);
-
-    // parse status
-    syshook_parse_child_signal(process->tid, status, &parsed_status);
+    syshook_wait_for_signal(process, &parsed_status);
 
     // verify status
     switch(parsed_status.type) {
@@ -789,10 +780,7 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
         syshook_continue(process, 0);
 
         // wait for ENTRY
-        safe_waitpid(process->tid, &status, __WALL);
-
-        // parse status
-        syshook_parse_child_signal(process->tid, status, &parsed_status);
+        syshook_wait_for_signal(process, &parsed_status);
 
         // verify status
         switch(parsed_status.type) {
