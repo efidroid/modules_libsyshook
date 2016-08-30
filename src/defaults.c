@@ -36,14 +36,6 @@ SYSCALL_DEFINE1(clone, unsigned long, clone_flags)
     return handle_fork(process, clone_flags);
 }
 
-SYSCALL_DEFINE0(execve)
-{
-    long rc = syshook_invoke_hookee(process);
-    process->expect_execve = true;
-
-    return rc;
-}
-
 static long handle_fork(syshook_process_t* process, unsigned long clone_flags) {
     if(syshook_is_entry(process)) {
         // setup process trap
@@ -72,7 +64,6 @@ void syshook_register_defaults(syshook_context_t* context) {
     syshook_register_syscall(fork);
     syshook_register_syscall(vfork);
     syshook_register_syscall(clone);
-    syshook_register_syscall(execve);
 
     syshook_register_syscall(ptrace);
 }

@@ -66,17 +66,10 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
 
         // wait for EXIT
         syshook_wait_for_signal(process, &parsed_status);
+        syshook_handle_child_signal(process, &parsed_status, STATUS_TYPE_SYSCALL);
 
-        // verify status
-        switch(parsed_status.type) {
-            case STATUS_TYPE_SYSCALL:
-                // get new state
-                syshook_arch_get_state(process, state);
-                break;
-
-            default:
-                LOGF("invalid status\n");
-        }
+        // get new state
+        syshook_arch_get_state(process, state);
 
         // set registers
         safe_ptrace(PTRACE_SETREGS, process->tid, 0, (void*)regs);
@@ -92,17 +85,10 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
 
         // wait for ENTRY
         syshook_wait_for_signal(process, &parsed_status);
+        syshook_handle_child_signal(process, &parsed_status, STATUS_TYPE_SYSCALL);
 
-        // verify status
-        switch(parsed_status.type) {
-            case STATUS_TYPE_SYSCALL:
-                // get new state
-                syshook_arch_get_state(process, state);
-                break;
-
-            default:
-                LOGF("invalid status\n");
-        }
+        // get new state
+        syshook_arch_get_state(process, state);
 
         // restore regs
         syshook_arch_syscall_set(state, scno);

@@ -36,9 +36,15 @@ struct syshook_context {
     syshook_list_node_t processes;
     void** sys_call_table;
     long ptrace_options;
+    pid_t roottid;
 
     // threading
     pthread_mutex_t lock;
+
+    // exit condition
+    pthread_cond_t exit_cond;
+    pthread_mutex_t exit_mutex;
+    int do_exit;
 
     // callbacks
     int (*create_process)(syshook_process_t*);
@@ -66,12 +72,13 @@ struct syshook_process {
     // status
     void* original_state;
     void* state;
-    bool stopped;
 
     // threading
     pthread_t thread;
     pthread_mutex_t lock;
     jmp_buf jmpbuf;
+    sigjmp_buf sigjmpbuf;
+    pid_t thread_tid;
 
     long handler_context[10];
 

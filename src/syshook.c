@@ -24,9 +24,9 @@
 #include <common.h>
 #include <syshook.h>
 
-static __thread syshook_process_t* thread_process = NULL;
+static void syshook_parse_child_signal(pid_t tid, int status, parsed_status_t* pstatus);
 
-static void syshook_handle_child_signal(syshook_process_t* process, parsed_status_t* parsed_status);
+static __thread syshook_process_t* thread_process = NULL;
 
 static void syshook_continue(syshook_process_t* process, int signal) {
     safe_ptrace(PTRACE_SYSCALL, process->tid, 0, (void*)signal);
@@ -61,15 +61,15 @@ syshook_process_t* get_process_by_tid(syshook_context_t* context, pid_t tid) {
 }
 
 syshook_process_t* get_thread_process(void) {
+    if(!thread_process) {
+        LOGF("thread_process is not set\n");
+    }
     return thread_process;
 }
 
 void syshook_thread_exit(int code) {
-
     syshook_process_t* process = get_thread_process();
-    if(process) {
-        longjmp(process->jmpbuf, code);
-    }
+    longjmp(process->jmpbuf, code);
 }
 
 static syshook_process_t* syshook_handle_new_process(syshook_context_t* context, pid_t pid, pid_t tid, pid_t ppid, pid_t cpid) {
@@ -95,17 +95,7 @@ static syshook_process_t* syshook_handle_new_process(syshook_context_t* context,
     return process;
 }
 
-static void syshook_handle_stop_process(syshook_process_t* process) {
-    if(!process)
-        return;
-
-    LOGD("stopping %d\n", process->tid);
-    pthread_mutex_lock(&process->lock);
-    process->stopped = true;
-    pthread_mutex_unlock(&process->lock);
-}
-
-void syshook_delete_process(syshook_process_t* process) {
+static void syshook_delete_process(syshook_process_t* process) {
     LOGD("stopped %d\n", process->tid);
 
     if(process->context->destroy_process) {
@@ -186,32 +176,22 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
     long scno = syshook_arch_syscall_get(process->state);
     bool is_entry = syshook_arch_is_entry(process->state);
 
-    // ignore this one and just continue
-    if(process->expect_execve && scno==SYS_execve) {
-        process->expect_execve = false;
+    //LOGD("[%d:%d][SYSCALL][%s] %ld\n", process->pid, process->tid, is_entry?"ENTRY":"EXIT", scno);
 
-        if(process->context->execve_process) {
-            int rc = process->context->execve_process(process);
-            if(rc) {
-                LOGF("error in execve_process\n");
-            }
-        }
-
-        return 0;
+    if(process->expect_execve) {
+        LOGF("execve did not happen\n");
     }
 
     // this call will not have an exit, continue
-    if(scno==SYS_restart_syscall) {
+    if(!is_entry && scno==SYS_restart_syscall) {
         return 0;
     }
 
     // the syscall had no handler and got ignored
-    if(process->expect_syscall_exit) {
+    if(!is_entry && process->expect_syscall_exit) {
         process->expect_syscall_exit = false;
         return 0;
     }
-
-    //LOGD("[%d:%d][SYSCALL][%s] %ld\n", process->pid, process->tid, is_entry?"ENTRY":"EXIT", scno);
 
     if(!is_entry && !process->exit_handler) {
         LOGF("received exit but no exit handler is set\n");
@@ -248,6 +228,11 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
     else {
         // ignore this call
         process->expect_syscall_exit = true;
+
+        // wait for execve
+        // TODO: what if this call was handled or the scno was changed to execve?
+        if(is_entry && scno==SYS_execve)
+            process->expect_execve = true;
         return 0;
     }
 
@@ -263,23 +248,13 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
         // wait for EXIT
         parsed_status_t parsed_status;
         syshook_wait_for_signal(process, &parsed_status);
+        syshook_handle_child_signal(process, &parsed_status, STATUS_TYPE_SYSCALL);
 
-        // verify status
-        switch(parsed_status.type) {
-            case STATUS_TYPE_SYSCALL:
-                // get new state
-                syshook_arch_get_state(process, process->state);
+        // get new state
+        syshook_arch_get_state(process, process->state);
 
-                // this should always be getpid, so keep the original return value
-                syshook_arch_result_get(process->state);
-                break;
-            case STATUS_TYPE_EXIT:
-                syshook_handle_stop_process(process);
-                return -1;
-
-            default:
-                LOGF("invalid child status during syscall: %d\n", parsed_status.type);
-        }
+        // this should always be getpid, so keep the original return value
+        syshook_arch_result_get(process->state);
     }
 
     // restore state
@@ -297,7 +272,18 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
     return 0;
 }
 
-void syshook_parse_child_signal(pid_t tid, int status, parsed_status_t* pstatus) {
+void notify_execve_threads(syshook_context_t* context) {
+    pthread_mutex_lock(&context->lock);
+    syshook_process_t *entry;
+    list_for_every_entry(&context->processes, entry, syshook_process_t, node) {
+        if(entry->expect_execve) {
+            kill(entry->thread_tid, SIGUSR1);
+        }
+    }
+    pthread_mutex_unlock(&context->lock);
+}
+
+static void syshook_parse_child_signal(pid_t tid, int status, parsed_status_t* pstatus) {
     int signal = 0;
 
     if(WIFEXITED(status)) {
@@ -337,6 +323,20 @@ void syshook_parse_child_signal(pid_t tid, int status, parsed_status_t* pstatus)
                     pstatus->data = data;
                     break;
 
+                case PTRACE_EVENT_EXEC:
+                    if(safe_ptrace_ex(PTRACE_GETEVENTMSG, tid, NULL, &data, 1)==-1) {
+                        signal = 0;
+                        pstatus->type = STATUS_TYPE_EXEC_OTHER;
+                        pstatus->data = 0;
+                    }
+                    else {
+                        signal = 0;
+                        pstatus->type = STATUS_TYPE_EXEC;
+                        pstatus->data = data;
+                    }
+                    LOGD("[%d][TRAP] event=%s caller=%d\n", tid, ptraceevent2str(event), (pid_t)data);
+                    break;
+
                 default:
                     safe_ptrace(PTRACE_GETSIGINFO, tid, NULL, &siginfo);
 
@@ -349,7 +349,7 @@ void syshook_parse_child_signal(pid_t tid, int status, parsed_status_t* pstatus)
                         }
                     }
                     else {
-                        LOGF("[%d][TRAP] unknown event %d\n", tid, event);
+                        LOGF("[%d][TRAP] unknown event: %s(%d)\n", tid, ptraceevent2str(event), event);
                     }
             }
         }
@@ -372,27 +372,97 @@ void syshook_parse_child_signal(pid_t tid, int status, parsed_status_t* pstatus)
     pstatus->signal = signal;
 }
 
+static void thread_usr1_handler(int sig, siginfo_t *info, void *vp) {
+    (void)(sig);
+    (void)(info);
+    (void)(vp);
+
+    syshook_process_t* process = get_thread_process();
+    siglongjmp (process->sigjmpbuf, 1);
+}
+
+static int util_setsighandler(int signum, void (*handler)(int, siginfo_t *, void *))
+{
+    struct sigaction usr_action;
+    sigset_t block_mask;
+    int rc;
+
+    rc = sigfillset (&block_mask);
+    if (rc) {
+        return rc;
+    }
+
+    usr_action.sa_sigaction = handler;
+    usr_action.sa_mask = block_mask;
+    usr_action.sa_flags = SA_SIGINFO;
+    return sigaction(signum, &usr_action, NULL);
+}
+
 static void* syshook_child_thread(void* pdata) {
     syshook_process_t* process = pdata;
     parsed_status_t parsed_status;
 
     thread_process = process;
+    process->thread_tid = (pid_t)syscall(SYS_gettid);
+    util_setsighandler(SIGUSR1, thread_usr1_handler);
 
     int rc = setjmp(process->jmpbuf);
     if(rc) {
         goto stopthread;
     }
 
-    // attach to process
-    safe_ptrace(PTRACE_ATTACH, process->tid, 0, (void*)0);
+    if(process->is_root_process) {
+        // continue child
+        syshook_continue(process, 0);
+    }
+    else {
+        // attach to process
+        safe_ptrace(PTRACE_ATTACH, process->tid, 0, (void*)0);
+    }
+
+    rc = sigsetjmp (process->sigjmpbuf, 1);
+    if(rc) {
+        // get event message
+        unsigned long data;
+        safe_ptrace(PTRACE_GETEVENTMSG, process->pid, NULL, &data);
+        LOGV("execve. we're the thread leader now\n");
+
+        if(process->context->execve_process) {
+            rc = process->context->execve_process(process);
+            if(rc) {
+                LOGF("error in execve_process\n");
+            }
+        }
+
+        // update process state
+        process->tid = process->pid;
+        process->expect_execve = false;
+        if(process->tid==process->context->roottid) {
+            process->is_root_process = true;
+            LOGV("we're the root process now too\n");
+        }
+
+        // continue
+        syshook_continue(process, 0);
+    }
 
     // main loop
-    while(!process->stopped) {
+    for(;;) {
         syshook_wait_for_signal(process, &parsed_status);
-        syshook_handle_child_signal(process, &parsed_status);
+        syshook_handle_child_signal(process, &parsed_status, 0);
     }
 
 stopthread:
+    if(rc<=0)
+        LOGF("exited in a unexpected way\n");
+
+    if(process->is_root_process && rc!=THREAD_EXIT_CODE_EXEC) {
+        pthread_mutex_lock(&process->context->exit_mutex);
+        process->context->do_exit = rc;
+        pthread_cond_signal(&process->context->exit_cond);
+        pthread_mutex_unlock(&process->context->exit_mutex);
+    }
+
     syshook_delete_process(process);
 
     return NULL;
@@ -429,8 +499,7 @@ static void syshook_handle_new_clone(syshook_context_t* context, syshook_process
     // wait for SIGSTOP
     syshook_wait_for_signal(process, &parsed_status);
     if(!(parsed_status.type==STATUS_TYPE_OTHER && parsed_status.signal==SIGSTOP)) {
-        syshook_thread_exit(1);
-        LOGF("status error in main thread\n");
+        syshook_thread_exit(THREAD_EXIT_CODE_ERROR);
     }
 
     // get state
@@ -469,15 +538,42 @@ static void syshook_handle_new_clone(syshook_context_t* context, syshook_process
     pthread_attr_destroy(&attr);
 }
 
+void syshook_handle_child_signal(syshook_process_t* process, parsed_status_t* parsed_status, status_type_t retsignals) {
+    int rc;
 
-static void syshook_handle_child_signal(syshook_process_t* process, parsed_status_t* parsed_status) {
+    if(parsed_status->type & retsignals)
+        return;
+
     switch(parsed_status->type) {
         case STATUS_TYPE_EXIT:
-            syshook_handle_stop_process(process);
+            LOGD("stopping %d\n", process->tid);
+
+            // stop this tracer thread
+            syshook_thread_exit(THREAD_EXIT_CODE_STOP);
             break;
 
         case STATUS_TYPE_CLONE:
             syshook_handle_new_clone(process->context, process, (pid_t)parsed_status->data);
+            syshook_continue(process, 0);
+            break;
+
+        case STATUS_TYPE_EXEC_OTHER:
+            notify_execve_threads(process->context);
+            syshook_thread_exit(THREAD_EXIT_CODE_EXEC);
+            break;
+
+        case STATUS_TYPE_EXEC:
+            if(!process->expect_execve)
+                LOGF("did not expect execve");
+
+            if(process->context->execve_process) {
+                rc = process->context->execve_process(process);
+                if(rc) {
+                    LOGF("error in execve_process\n");
+                }
+            }
+
+            process->expect_execve = false;
             syshook_continue(process, 0);
             break;
 
@@ -528,7 +624,10 @@ syshook_context_t* syshook_create_context(void** sys_call_table) {
     ptrace_options |= PTRACE_O_TRACEFORK;
     ptrace_options |= PTRACE_O_TRACEVFORK;
     ptrace_options |= PTRACE_O_TRACECLONE;
+    // this allows us to safely identify syscalls
     ptrace_options |= PTRACE_O_TRACESYSGOOD;
+    // this notifies us about exec's
+    ptrace_options |= PTRACE_O_TRACEEXEC;
 
     syshook_context_t* context = calloc(1, sizeof(syshook_context_t));
     context->pagesize = getpagesize();
@@ -536,6 +635,8 @@ syshook_context_t* syshook_create_context(void** sys_call_table) {
     context->sys_call_table = sys_call_table;
     context->ptrace_options = ptrace_options;
     pthread_mutex_init(&context->lock, NULL);
+    pthread_cond_init(&context->exit_cond, NULL);
+    pthread_mutex_init(&context->exit_mutex, NULL);
 
     return context;
 }
@@ -546,8 +647,8 @@ int syshook_execvp(char **argv, void** sys_call_table) {
 }
 
 int syshook_execvp_ex(syshook_context_t* context, char **argv) {
+    int rc;
     int status;
-    parsed_status_t parsed_status;
 
     if(thread_process) {
         return -1;
@@ -560,7 +661,7 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
         // start tracing
         safe_ptrace(PTRACE_TRACEME, 0, NULL, NULL);
 
-        // Give the parent to chance to set some extra tracing options before we
+        // give the parent a chance to set some extra tracing options before we
         // restart the child and let it call exec()
         raise(SIGTRAP);
 
@@ -571,6 +672,8 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
     }
 
     // parent
+
+    context->roottid = pid;
 
     // Wait for SIGTRAP from the child
     safe_waitpid(pid, &status, __WALL);
@@ -590,15 +693,6 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
     rootprocess->sigstop_received = true;
     rootprocess->is_root_process = true;
 
-    // set thread_process
-    thread_process = rootprocess;
-
-    // set error handler
-    int rc = setjmp(rootprocess->jmpbuf);
-    if(rc) {
-        LOGF("MAIN thread error\n");
-    }
-
     // run callback
     if(context->create_process) {
         rc = context->create_process(rootprocess);
@@ -607,35 +701,37 @@ int syshook_execvp_ex(syshook_context_t* context, char **argv) {
         }
     }
 
-    // continue child
-    syshook_continue(rootprocess, 0);
+    // run thread loop
+    syshook_child_thread(rootprocess);
 
-    // main loop
-    while(!rootprocess->stopped) {
-        syshook_wait_for_signal(rootprocess, &parsed_status);
-        syshook_handle_child_signal(rootprocess, &parsed_status);
+    // wait for global exit to happen
+    while(!context->do_exit) {
+        pthread_mutex_lock(&context->exit_mutex);
+        pthread_cond_wait(&context->exit_cond, &context->exit_mutex);
+        pthread_mutex_unlock(&context->exit_mutex);
     }
-    syshook_delete_process(rootprocess);
-
-    LOGD("root process stopped. killing all tracees\n");
+    if(context->do_exit!=THREAD_EXIT_CODE_STOP) {
+        LOGE("main process exited with error: %d\n", context->do_exit);
+    }
 
     // kill all tracees
+    LOGD("root process stopped. killing all tracees\n");
     pthread_mutex_lock(&context->lock);
-    while(!list_is_empty(&context->processes)) {
+    if(!list_is_empty(&context->processes)) {
         syshook_process_t* process = list_peek_tail_type(&context->processes, syshook_process_t, node);
-
         pthread_mutex_lock(&process->lock);
-        if(!process->stopped) {
-            kill(SIGKILL, process->tid);
 
-            pthread_mutex_unlock(&process->lock);
-            pthread_mutex_unlock(&context->lock);
-            pthread_join(process->thread, NULL);
+        // this may fail if the process has already exited
+        // and the tracee just waits for us to release the context lock
+        kill(SIGKILL, process->tid);
 
-            pthread_mutex_lock(&context->lock);
-        } else {
-            pthread_mutex_unlock(&process->lock);
-        }
+        // allow thread to proceed
+        // we can't join thme because they're detached
+        pthread_mutex_unlock(&process->lock);
+        pthread_mutex_unlock(&context->lock);
+
+        // re-lock context
+        pthread_mutex_lock(&context->lock);
     }
     pthread_mutex_unlock(&context->lock);
 
@@ -659,22 +755,11 @@ long syshook_invoke_hookee(syshook_process_t* process) {
     // wait for signal
     parsed_status_t parsed_status;
     syshook_wait_for_signal(process, &parsed_status);
+    syshook_handle_child_signal(process, &parsed_status, STATUS_TYPE_SYSCALL);
 
-    // verify status
-    switch(parsed_status.type) {
-        case STATUS_TYPE_EXIT:
-            syshook_handle_stop_process(process);
-            return 0;
-
-        case STATUS_TYPE_SYSCALL:
-            // get new state
-            syshook_arch_get_state(process, process->state);
-            return syshook_arch_result_get(process->state);
-
-        default:
-            LOGF("%s: invalid status: %d\n", __func__, parsed_status.type);
-            return -1;
-    }
+    // get new state
+    syshook_arch_get_state(process, process->state);
+    return syshook_arch_result_get(process->state);
 }
 
 long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
@@ -705,17 +790,10 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
 
         // wait for ENTRY
         syshook_wait_for_signal(process, &parsed_status);
+        syshook_handle_child_signal(process, &parsed_status, STATUS_TYPE_SYSCALL);
 
-        // verify status
-        switch(parsed_status.type) {
-            case STATUS_TYPE_SYSCALL:
-                // get new state
-                syshook_arch_get_state(process, process->state);
-                break;
-
-            default:
-                LOGF("%s: invalid status: %d\n", __func__, parsed_status.type);
-        }
+        // get new state
+        syshook_arch_get_state(process, process->state);
     }
 
     // set arguments
@@ -739,21 +817,10 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
 
     // wait for EXIT
     syshook_wait_for_signal(process, &parsed_status);
+    syshook_handle_child_signal(process, &parsed_status, STATUS_TYPE_SYSCALL);
 
-    // verify status
-    switch(parsed_status.type) {
-        case STATUS_TYPE_EXIT:
-            syshook_handle_stop_process(process);
-            return 0;
-
-        case STATUS_TYPE_SYSCALL:
-            // get new state
-            syshook_arch_get_state(process, process->state);
-            break;
-
-        default:
-            LOGF("%s: invalid status: %d\n", __func__, parsed_status.type);
-    }
+    // get new state
+    syshook_arch_get_state(process, process->state);
 
     // get result
     long ret = syshook_arch_result_get(process->state);
@@ -770,17 +837,10 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
 
         // wait for ENTRY
         syshook_wait_for_signal(process, &parsed_status);
+        syshook_handle_child_signal(process, &parsed_status, STATUS_TYPE_SYSCALL);
 
-        // verify status
-        switch(parsed_status.type) {
-            case STATUS_TYPE_SYSCALL:
-                // get new state
-                syshook_arch_get_state(process, process->state);
-                break;
-
-            default:
-                LOGF("%s: invalid status: %d\n", __func__, parsed_status.type);
-        }
+        // get new state
+        syshook_arch_get_state(process, process->state);
     }
 
     // restore state

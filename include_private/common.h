@@ -58,11 +58,18 @@
 #define INJECTION_SIZE(name) ((unsigned)(((void*)&name##_end) - ((void*)&name)))
 
 typedef enum {
-    STATUS_TYPE_EXIT,
-    STATUS_TYPE_CLONE,
-    STATUS_TYPE_SYSCALL,
-    STATUS_TYPE_OTHER,
+    STATUS_TYPE_EXIT = 0x1,
+    STATUS_TYPE_CLONE = 0x2,
+    STATUS_TYPE_SYSCALL= 0x4,
+    STATUS_TYPE_EXEC = 0x8,
+    STATUS_TYPE_EXEC_OTHER = 0x10,
+    STATUS_TYPE_OTHER = 0x20,
 } status_type_t;
+#define STATUS_TYPE_ALL 0xffff
+
+#define THREAD_EXIT_CODE_STOP 1
+#define THREAD_EXIT_CODE_EXEC 2
+#define THREAD_EXIT_CODE_ERROR 3
 
 typedef struct {
     status_type_t type;
@@ -75,9 +82,8 @@ typedef struct {
 } parsed_status_t;
 
 void syshook_wait_for_signal(syshook_process_t* process, parsed_status_t* parsed_status);
-void syshook_parse_child_signal(pid_t pid, int status, parsed_status_t* pstatus);
+void syshook_handle_child_signal(syshook_process_t* process, parsed_status_t* parsed_status, status_type_t retsignals);
 void syshook_register_defaults(syshook_context_t* context);
-void syshook_delete_process(syshook_process_t* process);
 syshook_context_t* syshook_get_thread_context(void);
 syshook_process_t* get_thread_process(void);
 void syshook_thread_exit(int code);
@@ -182,8 +188,8 @@ static inline pid_t safe_fork(void) {
     return pid;
 }
 
-static inline long safe_ptrace(enum __ptrace_request request, pid_t pid,
-                   void *addr, void *data)
+static inline long safe_ptrace_ex(enum __ptrace_request request, pid_t pid,
+                   void *addr, void *data, int return_when_notfound)
 {
     // clear errno
     errno = 0;
@@ -192,13 +198,23 @@ static inline long safe_ptrace(enum __ptrace_request request, pid_t pid,
     if(errno) {
         // No such process
         if(errno==ESRCH) {
-            syshook_thread_exit(1);
+            if(return_when_notfound)
+                return ret;
+
+            LOGV("ptrace(%s, %d, %p, %p): %s\n", ptracerequest2str(request), pid, addr, data, strerror(errno));
+            syshook_thread_exit(THREAD_EXIT_CODE_ERROR);
         }
 
         LOGF("ptrace(%s, %d, %p, %p): %s\n", ptracerequest2str(request), pid, addr, data, strerror(errno));
     }
 
     return ret;
+}
+
+static inline long safe_ptrace(enum __ptrace_request request, pid_t pid,
+                   void *addr, void *data)
+{
+    return safe_ptrace_ex(request, pid, addr, data, 0);
 }
 
 static inline pid_t safe_waitpid(pid_t pid, int *stat_loc, int options) {
