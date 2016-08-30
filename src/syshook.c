@@ -200,6 +200,7 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
     // apparently, the exit did not happen
     if(is_entry) {
         process->expect_syscall_exit = false;
+        process->exit_handler = NULL;
     }
 
     long ret = -1;
@@ -222,6 +223,7 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
         is_entry = syshook_arch_is_entry(process->state);
         if(is_entry) {
             syshook_arch_syscall_set(process->state, SYS_getpid);
+            syshook_invoke_hookee(process);
         }
     }
 
@@ -229,32 +231,17 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
         // ignore this call
         process->expect_syscall_exit = true;
 
-        // wait for execve
-        // TODO: what if this call was handled or the scno was changed to execve?
+        // check if this is execve
         if(is_entry && scno==SYS_execve)
             process->expect_execve = true;
+
         return 0;
     }
 
     // make sure we leave this function with the child in EXIT
     is_entry = syshook_arch_is_entry(process->state);
     if(is_entry) {
-        // copy new state to process
-        syshook_arch_set_state(process, process->state);
-
-        // continue
-        syshook_continue(process, 0);
-
-        // wait for EXIT
-        parsed_status_t parsed_status;
-        syshook_wait_for_signal(process, &parsed_status);
-        syshook_handle_child_signal(process, &parsed_status, STATUS_TYPE_SYSCALL);
-
-        // get new state
-        syshook_arch_get_state(process, process->state);
-
-        // this should always be getpid, so keep the original return value
-        syshook_arch_result_get(process->state);
+        LOGF("we're still in entry state\n");
     }
 
     // restore state
@@ -262,6 +249,7 @@ static int syshook_handle_child_syscall(syshook_process_t* process) {
 
     // set return value
     // this makes sure that set_state uses the result cache instead of the r0 register value
+    // also, we want to use whatever the handler returned instead of the real return value
     syshook_arch_result_set(process->state, ret);
 
     // copy new state to process
@@ -749,10 +737,14 @@ long syshook_invoke_hookee(syshook_process_t* process) {
     // copy new state to process
     syshook_arch_set_state(process, process->state);
 
+    // check if this is execve
+    if(syshook_arch_syscall_get(process->state)==SYS_execve)
+        process->expect_execve = true;
+
     // continue
     syshook_continue(process, 0);
 
-    // wait for signal
+    // wait for EXIT
     parsed_status_t parsed_status;
     syshook_wait_for_signal(process, &parsed_status);
     syshook_handle_child_signal(process, &parsed_status, STATUS_TYPE_SYSCALL);
@@ -811,6 +803,10 @@ long syshook_invoke_syscall(syshook_process_t* process, long scno, ...) {
 
     // copy new state to process
     syshook_arch_set_state(process, process->state);
+
+    // check if this is execve
+    if(syshook_arch_syscall_get(process->state)==SYS_execve)
+        process->expect_execve = true;
 
     // continue
     syshook_continue(process, 0);
