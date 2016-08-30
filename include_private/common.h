@@ -69,7 +69,8 @@ typedef enum {
 
 #define THREAD_EXIT_CODE_STOP 1
 #define THREAD_EXIT_CODE_EXEC 2
-#define THREAD_EXIT_CODE_ERROR 3
+#define THREAD_EXIT_CODE_EXEC_OTHER 3
+#define THREAD_EXIT_CODE_ERROR 4
 
 typedef struct {
     status_type_t type;
@@ -81,8 +82,7 @@ typedef struct {
     unsigned long data;
 } parsed_status_t;
 
-void syshook_wait_for_signal(syshook_process_t* process, parsed_status_t* parsed_status);
-void syshook_handle_child_signal(syshook_process_t* process, parsed_status_t* parsed_status, status_type_t retsignals);
+void syshook_handle_child_signals(syshook_process_t* process, parsed_status_t* parsed_status, status_type_t retsignals);
 void syshook_register_defaults(syshook_context_t* context);
 syshook_context_t* syshook_get_thread_context(void);
 syshook_process_t* get_thread_process(void);

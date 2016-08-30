@@ -65,8 +65,7 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
         safe_ptrace(PTRACE_SYSCALL, process->tid, 0, (void*)0);
 
         // wait for EXIT
-        syshook_wait_for_signal(process, &parsed_status);
-        syshook_handle_child_signal(process, &parsed_status, STATUS_TYPE_SYSCALL);
+        syshook_handle_child_signals(process, &parsed_status, STATUS_TYPE_SYSCALL);
 
         // get new state
         syshook_arch_get_state(process, state);
@@ -84,8 +83,7 @@ void syshook_arch_set_state(syshook_process_t* process, void* state) {
         safe_ptrace(PTRACE_SYSCALL, process->tid, 0, (void*)0);
 
         // wait for ENTRY
-        syshook_wait_for_signal(process, &parsed_status);
-        syshook_handle_child_signal(process, &parsed_status, STATUS_TYPE_SYSCALL);
+        syshook_handle_child_signals(process, &parsed_status, STATUS_TYPE_SYSCALL);
 
         // get new state
         syshook_arch_get_state(process, state);
