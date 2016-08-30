@@ -526,6 +526,12 @@ static void syshook_handle_new_clone(syshook_context_t* context, syshook_process
     pthread_attr_destroy(&attr);
 }
 
+void syshook_stop_tracing(syshook_process_t* process) {
+    safe_ptrace(PTRACE_DETACH, process->tid, 0, 0);
+    LOGV("stop tracing %d\n", process->tid);
+    longjmp(process->jmpbuf, THREAD_EXIT_CODE_STOP);
+}
+
 void syshook_handle_child_signal(syshook_process_t* process, parsed_status_t* parsed_status, status_type_t retsignals) {
     int rc;
 
