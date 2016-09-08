@@ -82,106 +82,110 @@ typedef struct {
     unsigned long data;
 } parsed_status_t;
 
-void syshook_handle_child_signals(syshook_process_t* process, parsed_status_t* parsed_status, status_type_t retsignals);
-void syshook_register_defaults(syshook_context_t* context);
-syshook_context_t* syshook_get_thread_context(void);
-syshook_process_t* get_thread_process(void);
+void syshook_handle_child_signals(syshook_process_t *process, parsed_status_t *parsed_status, status_type_t retsignals);
+void syshook_register_defaults(syshook_context_t *context);
+syshook_context_t *syshook_get_thread_context(void);
+syshook_process_t *get_thread_process(void);
 void syshook_thread_exit(int code);
 
 // string conversion
-static inline const char *sig2str( int signum ) {
-    switch(signum) {
-        STRCASE(SIGHUP);
-        STRCASE(SIGINT);
-        STRCASE(SIGQUIT);
-        STRCASE(SIGILL);
-        STRCASE(SIGTRAP);
-        STRCASE(SIGABRT);
-        STRCASE(SIGBUS);
-        STRCASE(SIGFPE);
-        STRCASE(SIGKILL);
-        STRCASE(SIGUSR1);
-        STRCASE(SIGSEGV);
-        STRCASE(SIGUSR2);
-        STRCASE(SIGPIPE);
-        STRCASE(SIGALRM);
-        STRCASE(SIGTERM);
-        STRCASE(SIGSTKFLT);
-        STRCASE(SIGCHLD);
-        STRCASE(SIGCONT);
-        STRCASE(SIGSTOP);
-        STRCASE(SIGTSTP);
-        STRCASE(SIGTTIN);
-        STRCASE(SIGTTOU);
-        STRCASE(SIGURG);
-        STRCASE(SIGXCPU);
-        STRCASE(SIGXFSZ);
-        STRCASE(SIGVTALRM);
-        STRCASE(SIGPROF);
-        STRCASE(SIGWINCH);
-        STRCASE(SIGIO);
-        STRCASE(SIGPWR);
-        STRCASE(SIGSYS);
-    default:
-        return "unknown";
+static inline const char *sig2str( int signum )
+{
+    switch (signum) {
+            STRCASE(SIGHUP);
+            STRCASE(SIGINT);
+            STRCASE(SIGQUIT);
+            STRCASE(SIGILL);
+            STRCASE(SIGTRAP);
+            STRCASE(SIGABRT);
+            STRCASE(SIGBUS);
+            STRCASE(SIGFPE);
+            STRCASE(SIGKILL);
+            STRCASE(SIGUSR1);
+            STRCASE(SIGSEGV);
+            STRCASE(SIGUSR2);
+            STRCASE(SIGPIPE);
+            STRCASE(SIGALRM);
+            STRCASE(SIGTERM);
+            STRCASE(SIGSTKFLT);
+            STRCASE(SIGCHLD);
+            STRCASE(SIGCONT);
+            STRCASE(SIGSTOP);
+            STRCASE(SIGTSTP);
+            STRCASE(SIGTTIN);
+            STRCASE(SIGTTOU);
+            STRCASE(SIGURG);
+            STRCASE(SIGXCPU);
+            STRCASE(SIGXFSZ);
+            STRCASE(SIGVTALRM);
+            STRCASE(SIGPROF);
+            STRCASE(SIGWINCH);
+            STRCASE(SIGIO);
+            STRCASE(SIGPWR);
+            STRCASE(SIGSYS);
+        default:
+            return "unknown";
     }
 }
 
-static inline const char *ptraceevent2str(int event){
-    switch(event) {
-        STRCASE(PTRACE_EVENT_VFORK);
-        STRCASE(PTRACE_EVENT_FORK);
-        STRCASE(PTRACE_EVENT_CLONE);
-        STRCASE(PTRACE_EVENT_VFORK_DONE);
-        STRCASE(PTRACE_EVENT_EXEC);
-        STRCASE(PTRACE_EVENT_EXIT);
-        STRCASE(PTRACE_EVENT_SECCOMP);
-    default:
-        return "unknown";
+static inline const char *ptraceevent2str(int event)
+{
+    switch (event) {
+            STRCASE(PTRACE_EVENT_VFORK);
+            STRCASE(PTRACE_EVENT_FORK);
+            STRCASE(PTRACE_EVENT_CLONE);
+            STRCASE(PTRACE_EVENT_VFORK_DONE);
+            STRCASE(PTRACE_EVENT_EXEC);
+            STRCASE(PTRACE_EVENT_EXIT);
+            STRCASE(PTRACE_EVENT_SECCOMP);
+        default:
+            return "unknown";
     }
 }
 
-static inline const char *ptracerequest2str(enum __ptrace_request request){
-    switch(request) {
-        STRCASE(PTRACE_TRACEME);
-        STRCASE(PTRACE_PEEKTEXT);
-        STRCASE(PTRACE_PEEKDATA);
-        STRCASE(PTRACE_PEEKUSER);
-        STRCASE(PTRACE_POKETEXT);
-        STRCASE(PTRACE_POKEDATA);
-        STRCASE(PTRACE_POKEUSER);
-        STRCASE(PTRACE_CONT);
-        STRCASE(PTRACE_KILL);
-        STRCASE(PTRACE_SINGLESTEP);
-        STRCASE(PTRACE_GETREGS);
-        STRCASE(PTRACE_SETREGS);
-        STRCASE(PTRACE_GETFPREGS);
-        STRCASE(PTRACE_SETFPREGS);
-        STRCASE(PTRACE_ATTACH);
-        STRCASE(PTRACE_DETACH);
-        STRCASE(PTRACE_GETFPXREGS);
-        STRCASE(PTRACE_SETFPXREGS);
-        STRCASE(PTRACE_SYSCALL);
-        STRCASE(PTRACE_SETOPTIONS);
-        STRCASE(PTRACE_GETEVENTMSG);
-        STRCASE(PTRACE_GETSIGINFO);
-        STRCASE(PTRACE_SETSIGINFO);
-        STRCASE(PTRACE_GETREGSET);
-        STRCASE(PTRACE_SETREGSET);
-        STRCASE(PTRACE_SEIZE);
-        STRCASE(PTRACE_INTERRUPT);
-        STRCASE(PTRACE_PEEKSIGINFO);
+static inline const char *ptracerequest2str(enum __ptrace_request request)
+{
+    switch (request) {
+            STRCASE(PTRACE_TRACEME);
+            STRCASE(PTRACE_PEEKTEXT);
+            STRCASE(PTRACE_PEEKDATA);
+            STRCASE(PTRACE_PEEKUSER);
+            STRCASE(PTRACE_POKETEXT);
+            STRCASE(PTRACE_POKEDATA);
+            STRCASE(PTRACE_POKEUSER);
+            STRCASE(PTRACE_CONT);
+            STRCASE(PTRACE_KILL);
+            STRCASE(PTRACE_SINGLESTEP);
+            STRCASE(PTRACE_GETREGS);
+            STRCASE(PTRACE_SETREGS);
+            STRCASE(PTRACE_GETFPREGS);
+            STRCASE(PTRACE_SETFPREGS);
+            STRCASE(PTRACE_ATTACH);
+            STRCASE(PTRACE_DETACH);
+            STRCASE(PTRACE_GETFPXREGS);
+            STRCASE(PTRACE_SETFPXREGS);
+            STRCASE(PTRACE_SYSCALL);
+            STRCASE(PTRACE_SETOPTIONS);
+            STRCASE(PTRACE_GETEVENTMSG);
+            STRCASE(PTRACE_GETSIGINFO);
+            STRCASE(PTRACE_SETSIGINFO);
+            STRCASE(PTRACE_GETREGSET);
+            STRCASE(PTRACE_SETREGSET);
+            STRCASE(PTRACE_SEIZE);
+            STRCASE(PTRACE_INTERRUPT);
+            STRCASE(PTRACE_PEEKSIGINFO);
 
-    default:
-        return "unknown";
+        default:
+            return "unknown";
     }
 }
 
 // safety wrappers
 
-static inline pid_t safe_fork(void) {
+static inline pid_t safe_fork(void)
+{
     pid_t pid = fork();
-    if(pid<0) {
+    if (pid<0) {
         LOGF("fork: %s\n", strerror(errno));
     }
 
@@ -189,16 +193,16 @@ static inline pid_t safe_fork(void) {
 }
 
 static inline long safe_ptrace_ex(enum __ptrace_request request, pid_t pid,
-                   void *addr, void *data, int return_when_notfound)
+                                  void *addr, void *data, int return_when_notfound)
 {
     // clear errno
     errno = 0;
 
     long ret = ptrace(request, pid, addr, data);
-    if(errno) {
+    if (errno) {
         // No such process
-        if(errno==ESRCH) {
-            if(return_when_notfound)
+        if (errno==ESRCH) {
+            if (return_when_notfound)
                 return ret;
 
             LOGV("ptrace(%s, %d, %p, %p): %s\n", ptracerequest2str(request), pid, addr, data, strerror(errno));
@@ -212,34 +216,37 @@ static inline long safe_ptrace_ex(enum __ptrace_request request, pid_t pid,
 }
 
 static inline long safe_ptrace(enum __ptrace_request request, pid_t pid,
-                   void *addr, void *data)
+                               void *addr, void *data)
 {
     return safe_ptrace_ex(request, pid, addr, data, 0);
 }
 
-static inline pid_t safe_waitpid(pid_t pid, int *stat_loc, int options) {
+static inline pid_t safe_waitpid(pid_t pid, int *stat_loc, int options)
+{
     *stat_loc = 0;
 
     pid_t ret = waitpid(pid, stat_loc, options);
-    if(ret==-1 || (pid!=-1 && ret!=pid)) {
+    if (ret==-1 || (pid!=-1 && ret!=pid)) {
         LOGF("waitpid: %s\n", strerror(errno));
     }
 
     return ret;
 }
 
-static inline void* safe_malloc(size_t size) {
-    void* mem = malloc(size);
-    if(!mem) {
+static inline void *safe_malloc(size_t size)
+{
+    void *mem = malloc(size);
+    if (!mem) {
         LOGF("malloc: %s\n", strerror(errno));
     }
 
     return mem;
 }
 
-static inline void* safe_calloc(size_t num, size_t size) {
-    void* mem = calloc(num, size);
-    if(!mem) {
+static inline void *safe_calloc(size_t num, size_t size)
+{
+    void *mem = calloc(num, size);
+    if (!mem) {
         LOGF("calloc: %s\n", strerror(errno));
     }
 

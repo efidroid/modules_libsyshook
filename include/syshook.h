@@ -34,7 +34,7 @@ typedef struct syshook_process syshook_process_t;
 struct syshook_context {
     int pagesize;
     syshook_list_node_t processes;
-    void** sys_call_table;
+    void **sys_call_table;
     long ptrace_options;
     pid_t roottid;
 
@@ -47,9 +47,9 @@ struct syshook_context {
     int do_exit;
 
     // callbacks
-    int (*create_process)(syshook_process_t*);
-    int (*destroy_process)(syshook_process_t*);
-    int (*execve_process)(syshook_process_t*);
+    int (*create_process)(syshook_process_t *);
+    int (*destroy_process)(syshook_process_t *);
+    int (*execve_process)(syshook_process_t *);
 };
 
 struct syshook_process {
@@ -57,7 +57,7 @@ struct syshook_process {
     syshook_list_node_t node;
 
     // info
-    syshook_context_t* context;
+    syshook_context_t *context;
     pid_t pid;
     pid_t tid;
     pid_t ppid;
@@ -66,12 +66,12 @@ struct syshook_process {
     bool expect_execve;
     bool expect_syscall_exit;
     unsigned long clone_flags;
-    void* exit_handler;
+    void *exit_handler;
     bool is_root_process;
 
     // status
-    void* original_state;
-    void* state;
+    void *original_state;
+    void *state;
 
     // threading
     pthread_t thread;
@@ -83,42 +83,42 @@ struct syshook_process {
     long handler_context[10];
 
     // pdata of libsyshook users
-    void* pdata;
+    void *pdata;
 };
 
 // syshook init
-syshook_context_t* syshook_create_context(void** sys_call_table);
-int syshook_execvp(char **argv, void** sys_call_table);
-int syshook_execvp_ex(syshook_context_t* context, char **argv);
+syshook_context_t *syshook_create_context(void **sys_call_table);
+int syshook_execvp(char **argv, void **sys_call_table);
+int syshook_execvp_ex(syshook_context_t *context, char **argv);
 
 // syscall invocation
-long syshook_invoke_hookee(syshook_process_t* process);
-long syshook_invoke_syscall(syshook_process_t* process, long scno, ...);
-bool syshook_is_entry(syshook_process_t* process);
+long syshook_invoke_hookee(syshook_process_t *process);
+long syshook_invoke_syscall(syshook_process_t *process, long scno, ...);
+bool syshook_is_entry(syshook_process_t *process);
 
 // argument modification
-long syshook_syscall_get(syshook_process_t* process);
-void syshook_syscall_set(syshook_process_t* process, long scno);
-long syshook_result_get(syshook_process_t* process);
-long syshook_argument_get(syshook_process_t* process, int num);
-void syshook_argument_set(syshook_process_t* process, int num, long value);
+long syshook_syscall_get(syshook_process_t *process);
+void syshook_syscall_set(syshook_process_t *process, long scno);
+long syshook_result_get(syshook_process_t *process);
+long syshook_argument_get(syshook_process_t *process, int num);
+void syshook_argument_set(syshook_process_t *process, int num, long value);
 
-long syshook_copy_from_user(syshook_process_t* process, void *to, const void __user * from, unsigned long n);
-long syshook_copy_to_user(syshook_process_t* process, void __user *to, const void *from, unsigned long n);
+long syshook_copy_from_user(syshook_process_t *process, void *to, const void __user *from, unsigned long n);
+long syshook_copy_to_user(syshook_process_t *process, void __user *to, const void *from, unsigned long n);
 
 /*
  * strndup_user - duplicate an existing string from user space
  * @s: The string to duplicate
  * @n: Maximum number of bytes to copy, including the trailing NUL.
  */
-char* syshook_strndup_user(syshook_process_t* process, const char __user *s, long n);
-long syshook_strncpy_user(syshook_process_t* process, char *to, const char __user *from, long n);
+char *syshook_strndup_user(syshook_process_t *process, const char __user *s, long n);
+long syshook_strncpy_user(syshook_process_t *process, char *to, const char __user *from, long n);
 
-void* syshook_alloc_user(syshook_process_t* process, size_t size);
-int syshook_free_user(syshook_process_t* process, void* addr, size_t size);
+void *syshook_alloc_user(syshook_process_t *process, size_t size);
+int syshook_free_user(syshook_process_t *process, void *addr, size_t size);
 
-syshook_process_t* get_process_by_tid(syshook_context_t* context, pid_t tid);
-void syshook_stop_tracing(syshook_process_t* process);
+syshook_process_t *get_process_by_tid(syshook_context_t *context, pid_t tid);
+void syshook_stop_tracing(syshook_process_t *process);
 
 
 #endif // _SYSHOOK_H_

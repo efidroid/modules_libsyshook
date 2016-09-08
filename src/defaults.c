@@ -19,7 +19,7 @@
 
 #include <common.h>
 
-static long handle_fork(syshook_process_t* process, unsigned long clone_flags);
+static long handle_fork(syshook_process_t *process, unsigned long clone_flags);
 
 SYSCALL_DEFINE0(fork)
 {
@@ -36,8 +36,9 @@ SYSCALL_DEFINE1(clone, unsigned long, clone_flags)
     return handle_fork(process, clone_flags);
 }
 
-static long handle_fork(syshook_process_t* process, unsigned long clone_flags) {
-    if(syshook_is_entry(process)) {
+static long handle_fork(syshook_process_t *process, unsigned long clone_flags)
+{
+    if (syshook_is_entry(process)) {
         // setup process trap
         syshook_arch_setup_process_trap(process);
 
@@ -47,8 +48,7 @@ static long handle_fork(syshook_process_t* process, unsigned long clone_flags) {
         // set ourself as exit handler
         process->exit_handler = sys_clone;
         return 0;
-    }
-    else {
+    } else {
         return syshook_result_get(process);
     }
 }
@@ -59,7 +59,8 @@ SYSCALL_DEFINE0(ptrace)
 }
 
 #define syshook_register_syscall(name) if(!context->sys_call_table[SYS_##name]) context->sys_call_table[SYS_##name] = sys_##name;
-void syshook_register_defaults(syshook_context_t* context) {
+void syshook_register_defaults(syshook_context_t *context)
+{
     // register syscalls
     syshook_register_syscall(fork);
     syshook_register_syscall(vfork);
