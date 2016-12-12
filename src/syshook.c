@@ -801,7 +801,7 @@ long syshook_invoke_syscall(syshook_process_t *process, long scno, ...)
 {
     int i;
     parsed_status_t parsed_status;
-    uint8_t *state[PLATFORM_STATE_SIZE];
+    uint8_t state[PLATFORM_STATE_SIZE];
     unsigned long instr;
     long pc = syshook_arch_get_pc(process->state);
     bool was_entry = syshook_arch_is_entry(process->state);
