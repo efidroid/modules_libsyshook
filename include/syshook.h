@@ -69,6 +69,10 @@ struct syshook_process {
     void *exit_handler;
     bool is_root_process;
 
+    // trap info
+    void __user *trap_mem;
+    long trap_size;
+
     // status
     void *original_state;
     void *state;

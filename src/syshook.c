@@ -185,6 +185,7 @@ static int syshook_handle_child_syscall(syshook_process_t *process)
 
     long scno = syshook_arch_syscall_get(process->state);
     bool is_entry = syshook_arch_is_entry(process->state);
+    bool force_copy_state = false;
 
     //LOGD("[%d:%d][SYSCALL][%s] %ld\n", process->pid, process->tid, is_entry?"ENTRY":"EXIT", scno);
 
@@ -216,6 +217,16 @@ static int syshook_handle_child_syscall(syshook_process_t *process)
     if (is_entry) {
         process->expect_syscall_exit = false;
         process->exit_handler = NULL;
+
+        if (process->trap_mem && process->sigstop_received) {
+            // free up trap memory
+            if (syshook_invoke_syscall(process, SYS_munmap, process->trap_mem, process->trap_size))
+                LOGF("can't munmap process trap\n");
+
+            process->trap_mem = NULL;
+            process->trap_size = 0;
+            force_copy_state = true;
+        }
     }
 
     long ret = -1;
@@ -243,6 +254,11 @@ static int syshook_handle_child_syscall(syshook_process_t *process)
     }
 
     else {
+        if (force_copy_state) {
+            // copy new state to process
+            syshook_arch_set_state(process, process->state);
+        }
+
         // ignore this call
         process->expect_syscall_exit = true;
 
@@ -520,8 +536,9 @@ static void syshook_handle_new_clone(syshook_context_t *context, syshook_process
     syshook_arch_get_state(process, process->state);
 
     // set PC
+    syshook_arch_setup_process_trap(process);
     process->handler_context[0] = syshook_arch_get_pc(process->state);
-    syshook_arch_set_pc(process->state, creator->handler_context[0]);
+    syshook_arch_set_pc(process->state, (long) process->trap_mem);
 
     // apply state
     syshook_arch_set_state(process, process->state);

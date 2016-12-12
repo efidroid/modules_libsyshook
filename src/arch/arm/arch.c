@@ -272,6 +272,6 @@ void syshook_arch_setup_process_trap(syshook_process_t *process)
     syshook_copy_to_user(process, mem, fn_template, mem_size);
 
     // store context data
-    process->handler_context[0] = (long)mem;
-    process->handler_context[1] = mem_size_rounded;
+    process->trap_mem = mem;
+    process->trap_size = mem_size_rounded;
 }

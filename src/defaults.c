@@ -39,9 +39,6 @@ SYSCALL_DEFINE1(clone, unsigned long, clone_flags)
 static long handle_fork(syshook_process_t *process, unsigned long clone_flags)
 {
     if (syshook_is_entry(process)) {
-        // setup process trap
-        syshook_arch_setup_process_trap(process);
-
         // store context data
         process->handler_context[2] = clone_flags;
 
