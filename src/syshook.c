@@ -806,7 +806,7 @@ int syshook_execvp_ex(syshook_context_t *context, char **argv)
         kill(SIGKILL, process->tid);
 
         // allow thread to proceed
-        // we can't join thme because they're detached
+        // we can't join them because they're detached
         pthread_mutex_unlock(&process->lock);
         pthread_mutex_unlock(&context->lock);
 
