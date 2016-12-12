@@ -134,7 +134,7 @@ static void syshook_delete_process(syshook_process_t *process)
     free(process);
 }
 
-static long syshook_invoke_syscall_handler(syshook_process_t *process, long scno, ...)
+static long syshook_invoke_syscall_handler(syshook_process_t *process, long scno)
 {
     long (*fn)(syshook_process_t *, ...);
 
