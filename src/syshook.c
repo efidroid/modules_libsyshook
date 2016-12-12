@@ -77,6 +77,17 @@ void syshook_thread_exit(int code)
     longjmp(process->jmpbuf, code);
 }
 
+clone_flags_entry_t *syshook_get_clone_flags_entry(syshook_process_t *process, pid_t pid)
+{
+    clone_flags_entry_t *entry;
+    list_for_every_entry(&process->clone_flags_list, entry, clone_flags_entry_t, node) {
+        if (entry->pid==pid)
+            return entry;
+    }
+
+    return NULL;
+}
+
 static syshook_process_t *syshook_handle_new_process(syshook_context_t *context, pid_t pid, pid_t tid, pid_t ppid, pid_t cpid)
 {
     syshook_process_t *process;
@@ -91,6 +102,8 @@ static syshook_process_t *syshook_handle_new_process(syshook_context_t *context,
     process->state = safe_calloc(1, PLATFORM_STATE_SIZE);
     process->sigstop_received = false;
     pthread_mutex_init(&process->lock, NULL);
+    pthread_mutex_init(&process->clone_flags_lock, NULL);
+    list_initialize(&process->clone_flags_list);
 
     pthread_mutex_lock(&context->lock);
     list_add_tail(&context->processes, &process->node);
@@ -501,11 +514,30 @@ static void syshook_handle_new_clone(syshook_context_t *context, syshook_process
 {
     int rc;
     parsed_status_t parsed_status;
+    clone_flags_entry_t *entry;
 
     // register process
-    long clone_flags = creator->handler_context[2];
+    long clone_flags;
     pid_t clone_pid = clone_tid;
     pid_t clone_ppid = creator->pid;
+
+    pthread_mutex_lock(&creator->clone_flags_lock);
+
+    // get clone flags entry
+    entry = syshook_get_clone_flags_entry(creator, clone_tid);
+    if (!entry) {
+        entry = syshook_get_clone_flags_entry(creator, 0);
+    }
+    if (!entry) {
+        LOGF("can't find clone_flags entry\n");
+    }
+
+    // get clone_flags and delete entry
+    clone_flags = entry->clone_flags;
+    list_delete(&entry->node);
+    free(entry);
+
+    pthread_mutex_unlock(&creator->clone_flags_lock);
 
     if (clone_flags&CLONE_THREAD) {
         clone_pid = creator->pid;

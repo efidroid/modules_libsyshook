@@ -39,14 +39,33 @@ SYSCALL_DEFINE1(clone, unsigned long, clone_flags)
 static long handle_fork(syshook_process_t *process, unsigned long clone_flags)
 {
     if (syshook_is_entry(process)) {
-        // store context data
-        process->handler_context[2] = clone_flags;
+        clone_flags_entry_t *entry = safe_calloc(1, sizeof(syshook_process_t));
+        entry->pid = 0;
+        entry->clone_flags = clone_flags;
+
+        pthread_mutex_lock(&process->clone_flags_lock);
+        list_add_tail(&process->clone_flags_list, &entry->node);
+        pthread_mutex_unlock(&process->clone_flags_lock);
 
         // set ourself as exit handler
         process->exit_handler = sys_clone;
         return 0;
     } else {
-        return syshook_result_get(process);
+        pthread_mutex_lock(&process->clone_flags_lock);
+
+        pid_t pid = (pid_t) syshook_result_get(process);
+        clone_flags_entry_t *entry = syshook_get_clone_flags_entry(process, 0);
+        if (entry) {
+            if (pid<0) {
+                list_delete(&entry->node);
+                free(entry);
+            } else {
+                entry->pid = pid;
+            }
+        }
+
+        pthread_mutex_unlock(&process->clone_flags_lock);
+        return pid;
     }
 }
 

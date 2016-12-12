@@ -73,6 +73,10 @@ struct syshook_process {
     void __user *trap_mem;
     long trap_size;
 
+    // clone info
+    pthread_mutex_t clone_flags_lock;
+    syshook_list_node_t clone_flags_list;
+
     // status
     void *original_state;
     void *state;

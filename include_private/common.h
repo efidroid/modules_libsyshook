@@ -82,11 +82,19 @@ typedef struct {
     unsigned long data;
 } parsed_status_t;
 
+typedef struct {
+    syshook_list_node_t node;
+
+    pid_t pid;
+    unsigned long clone_flags;
+} clone_flags_entry_t;
+
 void syshook_handle_child_signals(syshook_process_t *process, parsed_status_t *parsed_status, status_type_t retsignals);
 void syshook_register_defaults(syshook_context_t *context);
 syshook_context_t *syshook_get_thread_context(void);
 syshook_process_t *get_thread_process(void);
 void syshook_thread_exit(int code);
+clone_flags_entry_t *syshook_get_clone_flags_entry(syshook_process_t *process, pid_t pid);
 
 // string conversion
 static inline const char *sig2str( int signum )
