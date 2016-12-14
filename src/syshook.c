@@ -232,9 +232,10 @@ static int syshook_handle_child_syscall(syshook_process_t *process)
         process->exit_handler = NULL;
 
         if (process->trap_mem && process->sigstop_received) {
+            long ret = syshook_invoke_syscall(process, SYS_munmap, process->trap_mem, process->trap_size);
             // free up trap memory
-            if (syshook_invoke_syscall(process, SYS_munmap, process->trap_mem, process->trap_size))
-                LOGF("can't munmap process trap\n");
+            if (ret)
+                LOGF("can't munmap process trap in child: %d\n", (int)ret);
 
             process->trap_mem = NULL;
             process->trap_size = 0;
@@ -532,10 +533,9 @@ static void syshook_handle_new_clone(syshook_context_t *context, syshook_process
         LOGF("can't find clone_flags entry\n");
     }
 
-    // get clone_flags and delete entry
+    // get clone_flags and remove entry from list
     clone_flags = entry->clone_flags;
     list_delete(&entry->node);
-    free(entry);
 
     pthread_mutex_unlock(&creator->clone_flags_lock);
 
@@ -549,6 +549,11 @@ static void syshook_handle_new_clone(syshook_context_t *context, syshook_process
 
     syshook_process_t *process = syshook_handle_new_process(context, clone_pid, clone_tid, clone_ppid, creator->tid);
     process->clone_flags = clone_flags;
+    process->trap_mem = entry->trap_mem;
+    process->trap_size = entry->trap_size;
+
+    // free clone entry
+    free(entry);
 
     // run callback
     if (context->create_process) {
@@ -568,7 +573,6 @@ static void syshook_handle_new_clone(syshook_context_t *context, syshook_process
     syshook_arch_get_state(process, process->state);
 
     // set PC
-    syshook_arch_setup_process_trap(process);
     process->handler_context[0] = syshook_arch_get_pc(process->state);
     syshook_arch_set_pc(process->state, (long) process->trap_mem);
 

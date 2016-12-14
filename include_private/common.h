@@ -87,6 +87,8 @@ typedef struct {
 
     pid_t pid;
     unsigned long clone_flags;
+    void __user *trap_mem;
+    long trap_size;
 } clone_flags_entry_t;
 
 void syshook_handle_child_signals(syshook_process_t *process, parsed_status_t *parsed_status, status_type_t retsignals);
