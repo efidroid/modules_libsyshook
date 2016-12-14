@@ -260,7 +260,7 @@ void syshook_arch_setup_process_trap(syshook_process_t *process)
         fn_template = INJECTION_PTR(inj_trap_arm);
         mem_size = INJECTION_SIZE(inj_trap_arm);
     }
-    long mem_size_rounded = ROUNDUP(mem_size, process->context->pagesize);;
+    long mem_size_rounded = ROUNDUP(mem_size, process->context->pagesize);
 
     // allocate child memory
     void __user *mem = (void *)syshook_invoke_syscall(process, SYS_mmap2, NULL, mem_size_rounded, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
