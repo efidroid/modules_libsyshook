@@ -47,5 +47,6 @@ long syshook_arch_result_get(void *state);
 void syshook_arch_result_set(void *state, long value);
 
 void syshook_arch_setup_process_trap(syshook_process_t *process);
+void syshook_arch_show_regs(void *state);
 
 #endif

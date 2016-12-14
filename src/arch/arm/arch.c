@@ -275,3 +275,36 @@ void syshook_arch_setup_process_trap(syshook_process_t *process)
     process->trap_mem = mem;
     process->trap_size = mem_size_rounded;
 }
+
+void syshook_arch_show_regs(void *state)
+{
+    syshook_internal_t *pdata = state;
+
+    unsigned long flags;
+    char buf[64];
+    const struct pt_regs *regs = (void *)pdata->regs;
+
+    LOGD("pc : [<%08lx>]    lr : [<%08lx>]    psr: %08lx\n",
+         regs->ARM_pc, regs->ARM_lr, regs->ARM_cpsr);
+    LOGD("sp : %08lx  ip : %08lx  fp : %08lx\n",
+         regs->ARM_sp, regs->ARM_ip, regs->ARM_fp);
+    LOGD("r10: %08lx  r9 : %08lx  r8 : %08lx\n",
+         regs->ARM_r10, regs->ARM_r9,
+         regs->ARM_r8);
+    LOGD("r7 : %08lx  r6 : %08lx  r5 : %08lx  r4 : %08lx\n",
+         regs->ARM_r7, regs->ARM_r6,
+         regs->ARM_r5, regs->ARM_r4);
+    LOGD("r3 : %08lx  r2 : %08lx  r1 : %08lx  r0 : %08lx\n",
+         regs->ARM_r3, regs->ARM_r2,
+         regs->ARM_r1, regs->ARM_r0);
+
+    flags = regs->ARM_cpsr;
+    buf[0] = flags & PSR_N_BIT ? 'N' : 'n';
+    buf[1] = flags & PSR_Z_BIT ? 'Z' : 'z';
+    buf[2] = flags & PSR_C_BIT ? 'C' : 'c';
+    buf[3] = flags & PSR_V_BIT ? 'V' : 'v';
+    buf[3] = flags & PSR_T_BIT ? 'T' : 't';
+    buf[4] = '\0';
+
+    LOGD("xPSR: %08lx Flags: %s\n", regs->ARM_cpsr, buf);
+}
