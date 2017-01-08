@@ -166,14 +166,26 @@ static inline const char *ptracerequest2str(enum __ptrace_request request)
             STRCASE(PTRACE_CONT);
             STRCASE(PTRACE_KILL);
             STRCASE(PTRACE_SINGLESTEP);
+#ifdef PT_GETREGS
             STRCASE(PTRACE_GETREGS);
+#endif
+#ifdef PT_SETREGS
             STRCASE(PTRACE_SETREGS);
+#endif
+#ifdef PT_GETFPREGS
             STRCASE(PTRACE_GETFPREGS);
+#endif
+#ifdef PT_SETFPREGS
             STRCASE(PTRACE_SETFPREGS);
+#endif
             STRCASE(PTRACE_ATTACH);
             STRCASE(PTRACE_DETACH);
+#ifdef PT_GETFPXREGS
             STRCASE(PTRACE_GETFPXREGS);
+#endif
+#ifdef PT_SETFPXREGS
             STRCASE(PTRACE_SETFPXREGS);
+#endif
             STRCASE(PTRACE_SYSCALL);
             STRCASE(PTRACE_SETOPTIONS);
             STRCASE(PTRACE_GETEVENTMSG);

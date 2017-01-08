@@ -30,7 +30,7 @@ static __thread syshook_process_t *thread_process = NULL;
 
 static void syshook_continue(syshook_process_t *process, int signal)
 {
-    safe_ptrace(PTRACE_SYSCALL, process->tid, 0, (void *)signal);
+    safe_ptrace(PTRACE_SYSCALL, process->tid, 0, (void *)(uintptr_t)signal);
 }
 
 static void syshook_wait_for_signal(syshook_process_t *process, parsed_status_t *parsed_status)
