@@ -98,8 +98,8 @@ static syshook_process_t *syshook_handle_new_process(syshook_context_t *context,
     process->tid = tid;
     process->ppid = ppid;
     process->creatorpid = cpid;
-    process->original_state = safe_calloc(1, PLATFORM_STATE_SIZE);
-    process->state = safe_calloc(1, PLATFORM_STATE_SIZE);
+    process->original_state = safe_calloc(1, syshook_arch_get_state_size());
+    process->state = safe_calloc(1, syshook_arch_get_state_size());
     process->sigstop_received = false;
     pthread_mutex_init(&process->lock, NULL);
     pthread_mutex_init(&process->clone_flags_lock, NULL);
@@ -854,7 +854,7 @@ long syshook_invoke_syscall(syshook_process_t *process, long scno, ...)
 {
     int i;
     parsed_status_t parsed_status;
-    uint8_t state[PLATFORM_STATE_SIZE];
+    uint8_t state[syshook_arch_get_state_size()];
     unsigned long instr;
     long pc = syshook_arch_get_pc(process->state);
     bool was_entry = syshook_arch_is_entry(process->state);

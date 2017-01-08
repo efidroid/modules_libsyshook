@@ -19,20 +19,10 @@
 
 #include <stdbool.h>
 
-typedef struct {
-    bool lowargs_changed;
-    bool highargs_changed;
-    bool scno_changed;
-    bool result_changed;
-    long result;
-    char regs[0];
-} syshook_internal_t;
-
-#define PLATFORM_STATE_SIZE (sizeof(syshook_internal_t) + (18*4))
-
 void syshook_arch_get_state(syshook_process_t *process, void *state);
 void syshook_arch_set_state(syshook_process_t *process, void *state);
 void syshook_arch_copy_state(void *dst, void *src);
+long syshook_arch_get_state_size(void);
 
 long syshook_arch_get_pc(void *state);
 void syshook_arch_set_pc(void *state, long pc);

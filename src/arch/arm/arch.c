@@ -15,12 +15,20 @@ INJECTION_DECLARE(inj_trap_thumb);
 #define thumb_mode(regs) (((regs)->ARM_cpsr & PSR_T_BIT))
 #endif
 
+typedef struct {
+    bool lowargs_changed;
+    bool highargs_changed;
+    bool scno_changed;
+    bool result_changed;
+    long result;
+    struct pt_regs regs;
+} syshook_internal_t;
+
 void syshook_arch_get_state(syshook_process_t *process, void *state)
 {
     syshook_internal_t *pdata = state;
-    struct pt_regs *regs = (void *)pdata->regs;
 
-    safe_ptrace(PTRACE_GETREGS, process->tid, 0, regs);
+    safe_ptrace(PTRACE_GETREGS, process->tid, 0, &pdata->regs);
     pdata->result = syshook_arch_argument_get(state, 0);
 
     // reset
@@ -33,7 +41,7 @@ void syshook_arch_get_state(syshook_process_t *process, void *state)
 void syshook_arch_set_state(syshook_process_t *process, void *state)
 {
     syshook_internal_t *pdata = state;
-    struct pt_regs *regs = (void *)pdata->regs;
+    struct pt_regs *regs = &pdata->regs;
 
     if (pdata->scno_changed) {
         //LOGD("apply scno\n");
@@ -115,30 +123,31 @@ void syshook_arch_set_state(syshook_process_t *process, void *state)
 bool syshook_arch_is_entry(void *state)
 {
     syshook_internal_t *pdata = state;
-    const struct pt_regs *regs = (void *)pdata->regs;
 
-    return (regs->ARM_ip==0);
+    return (pdata->regs.ARM_ip==0);
 }
 
 void syshook_arch_copy_state(void *dst, void *src)
 {
-    memcpy(dst, src, PLATFORM_STATE_SIZE);
+    memcpy(dst, src, sizeof(syshook_internal_t));
+}
+
+long syshook_arch_get_state_size(void)
+{
+    return sizeof(syshook_internal_t);
 }
 
 long syshook_arch_get_pc(void *state)
 {
     syshook_internal_t *pdata = state;
-    const struct pt_regs *regs = (void *)pdata->regs;
-
-    return regs->ARM_pc;
+    return pdata->regs.ARM_pc;
 }
 
 void syshook_arch_set_pc(void *state, long pc)
 {
     syshook_internal_t *pdata = state;
-    struct pt_regs *regs = (void *)pdata->regs;
 
-    regs->ARM_pc = pc;
+    pdata->regs.ARM_pc = pc;
     pdata->lowargs_changed = true;
 }
 
@@ -150,17 +159,14 @@ long syshook_arch_get_instruction_size(unsigned long instr)
 long syshook_arch_syscall_get(void *state)
 {
     syshook_internal_t *pdata = state;
-    const struct pt_regs *regs = (void *)pdata->regs;
-
-    return regs->ARM_r7;
+    return pdata->regs.ARM_r7;
 }
 
 void syshook_arch_syscall_set(void *state, long scno)
 {
     syshook_internal_t *pdata = state;
-    struct pt_regs *regs = (void *)pdata->regs;
 
-    regs->ARM_r7 = scno;
+    pdata->regs.ARM_r7 = scno;
     pdata->scno_changed = true;
     pdata->lowargs_changed = true;
 }
@@ -168,7 +174,7 @@ void syshook_arch_syscall_set(void *state, long scno)
 long syshook_arch_argument_get(void *state, int num)
 {
     syshook_internal_t *pdata = state;
-    const struct pt_regs *regs = (void *)pdata->regs;
+    const struct pt_regs *regs = &pdata->regs;
 
     switch (num) {
         case 0:
@@ -194,7 +200,7 @@ long syshook_arch_argument_get(void *state, int num)
 void syshook_arch_argument_set(void *state, int num, long value)
 {
     syshook_internal_t *pdata = state;
-    struct pt_regs *regs = (void *)pdata->regs;
+    struct pt_regs *regs = &pdata->regs;
 
     switch (num) {
         case 0:
@@ -250,10 +256,9 @@ void syshook_arch_setup_process_trap(syshook_process_t *process)
 
     // get regs
     syshook_internal_t *pdata = process->state;
-    const struct pt_regs *regs = (void *)pdata->regs;
 
     // get template to use
-    if (thumb_mode(regs)) {
+    if (thumb_mode(&pdata->regs)) {
         fn_template = INJECTION_PTR(inj_trap_thumb);
         mem_size = INJECTION_SIZE(inj_trap_thumb);
     } else {
@@ -282,7 +287,7 @@ void syshook_arch_show_regs(void *state)
 
     unsigned long flags;
     char buf[64];
-    const struct pt_regs *regs = (void *)pdata->regs;
+    const struct pt_regs *regs = &pdata->regs;
 
     LOGD("pc : [<%08lx>]    lr : [<%08lx>]    psr: %08lx\n",
          regs->ARM_pc, regs->ARM_lr, regs->ARM_cpsr);
