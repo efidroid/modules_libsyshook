@@ -22,33 +22,33 @@ typedef struct {
     bool result_changed;
     long result;
     struct pt_regs regs;
-} syshook_internal_t;
+} isyshook_state_t;
 
 void syshook_arch_get_state(syshook_process_t *process, void *state)
 {
-    syshook_internal_t *pdata = state;
+    isyshook_state_t *istate = state;
 
-    safe_ptrace(PTRACE_GETREGS, process->tid, 0, &pdata->regs);
-    pdata->result = syshook_arch_argument_get(state, 0);
+    safe_ptrace(PTRACE_GETREGS, process->tid, 0, &istate->regs);
+    istate->result = syshook_arch_argument_get(state, 0);
 
     // reset
-    pdata->lowargs_changed = false;
-    pdata->highargs_changed = false;
-    pdata->scno_changed = false;
-    pdata->result_changed = false;
+    istate->lowargs_changed = false;
+    istate->highargs_changed = false;
+    istate->scno_changed = false;
+    istate->result_changed = false;
 }
 
 void syshook_arch_set_state(syshook_process_t *process, void *state)
 {
-    syshook_internal_t *pdata = state;
-    struct pt_regs *regs = &pdata->regs;
+    isyshook_state_t *istate = state;
+    struct pt_regs *regs = &istate->regs;
 
-    if (pdata->scno_changed) {
+    if (istate->scno_changed) {
         //LOGD("apply scno\n");
         safe_ptrace(PTRACE_SET_SYSCALL, process->tid, 0, (void *)regs->ARM_r7);
     }
 
-    if (pdata->highargs_changed && syshook_arch_is_entry(state)) {
+    if (istate->highargs_changed && syshook_arch_is_entry(state)) {
         //LOGD("apply highregs\n");
 
         parsed_status_t parsed_status;
@@ -104,27 +104,27 @@ void syshook_arch_set_state(syshook_process_t *process, void *state)
         syshook_arch_argument_set(state, 0, a0);
     }
 
-    if (pdata->result_changed) {
-        regs->ARM_r0 = pdata->result;
+    if (istate->result_changed) {
+        regs->ARM_r0 = istate->result;
     }
 
-    if (pdata->lowargs_changed || pdata->highargs_changed) {
+    if (istate->lowargs_changed || istate->highargs_changed) {
         //LOGD("apply lowregs\n");
         safe_ptrace(PTRACE_SETREGS, process->tid, 0, (void *)regs);
     }
 
     // reset
-    pdata->lowargs_changed = false;
-    pdata->highargs_changed = false;
-    pdata->scno_changed = false;
-    pdata->result_changed = false;
+    istate->lowargs_changed = false;
+    istate->highargs_changed = false;
+    istate->scno_changed = false;
+    istate->result_changed = false;
 }
 
 bool syshook_arch_is_entry(void *state)
 {
-    syshook_internal_t *pdata = state;
+    isyshook_state_t *istate = state;
 
-    return (pdata->regs.ARM_ip==0);
+    return (istate->regs.ARM_ip==0);
 }
 
 void syshook_arch_init_state(void *state)
@@ -134,26 +134,26 @@ void syshook_arch_init_state(void *state)
 
 void syshook_arch_copy_state(void *dst, void *src)
 {
-    memcpy(dst, src, sizeof(syshook_internal_t));
+    memcpy(dst, src, sizeof(isyshook_state_t));
 }
 
 long syshook_arch_get_state_size(void)
 {
-    return sizeof(syshook_internal_t);
+    return sizeof(isyshook_state_t);
 }
 
 long syshook_arch_get_pc(void *state)
 {
-    syshook_internal_t *pdata = state;
-    return pdata->regs.ARM_pc;
+    isyshook_state_t *istate = state;
+    return istate->regs.ARM_pc;
 }
 
 void syshook_arch_set_pc(void *state, long pc)
 {
-    syshook_internal_t *pdata = state;
+    isyshook_state_t *istate = state;
 
-    pdata->regs.ARM_pc = pc;
-    pdata->lowargs_changed = true;
+    istate->regs.ARM_pc = pc;
+    istate->lowargs_changed = true;
 }
 
 long syshook_arch_get_instruction_size(void *state, unsigned long instr)
@@ -164,23 +164,23 @@ long syshook_arch_get_instruction_size(void *state, unsigned long instr)
 
 long syshook_arch_syscall_get(void *state)
 {
-    syshook_internal_t *pdata = state;
-    return pdata->regs.ARM_r7;
+    isyshook_state_t *istate = state;
+    return istate->regs.ARM_r7;
 }
 
 void syshook_arch_syscall_set(void *state, long scno)
 {
-    syshook_internal_t *pdata = state;
+    isyshook_state_t *istate = state;
 
-    pdata->regs.ARM_r7 = scno;
-    pdata->scno_changed = true;
-    pdata->lowargs_changed = true;
+    istate->regs.ARM_r7 = scno;
+    istate->scno_changed = true;
+    istate->lowargs_changed = true;
 }
 
 long syshook_arch_argument_get(void *state, int num)
 {
-    syshook_internal_t *pdata = state;
-    const struct pt_regs *regs = &pdata->regs;
+    isyshook_state_t *istate = state;
+    const struct pt_regs *regs = &istate->regs;
 
     switch (num) {
         case 0:
@@ -205,8 +205,8 @@ long syshook_arch_argument_get(void *state, int num)
 
 void syshook_arch_argument_set(void *state, int num, long value)
 {
-    syshook_internal_t *pdata = state;
-    struct pt_regs *regs = &pdata->regs;
+    isyshook_state_t *istate = state;
+    struct pt_regs *regs = &istate->regs;
 
     switch (num) {
         case 0:
@@ -235,24 +235,24 @@ void syshook_arch_argument_set(void *state, int num, long value)
     }
 
     if (num<=3) {
-        pdata->lowargs_changed = true;
+        istate->lowargs_changed = true;
     } else {
-        pdata->highargs_changed = true;
+        istate->highargs_changed = true;
     }
 }
 
 long syshook_arch_result_get(void *state)
 {
-    syshook_internal_t *pdata = state;
-    return pdata->result;
+    isyshook_state_t *istate = state;
+    return istate->result;
 }
 
 void syshook_arch_result_set(void *state, long value)
 {
-    syshook_internal_t *pdata = state;
+    isyshook_state_t *istate = state;
 
-    pdata->result = value;
-    pdata->result_changed = true;
+    istate->result = value;
+    istate->result_changed = true;
 }
 
 void syshook_arch_setup_process_trap(syshook_process_t *process)
@@ -261,10 +261,10 @@ void syshook_arch_setup_process_trap(syshook_process_t *process)
     long mem_size;
 
     // get regs
-    syshook_internal_t *pdata = process->state;
+    isyshook_state_t *istate = process->state;
 
     // get template to use
-    if (thumb_mode(&pdata->regs)) {
+    if (thumb_mode(&istate->regs)) {
         fn_template = INJECTION_PTR(inj_trap_thumb);
         mem_size = INJECTION_SIZE(inj_trap_thumb);
     } else {
@@ -289,11 +289,11 @@ void syshook_arch_setup_process_trap(syshook_process_t *process)
 
 void syshook_arch_show_regs(void *state)
 {
-    syshook_internal_t *pdata = state;
+    isyshook_state_t *istate = state;
 
     unsigned long flags;
     char buf[64];
-    const struct pt_regs *regs = &pdata->regs;
+    const struct pt_regs *regs = &istate->regs;
 
     LOGD("pc : [<%08lx>]    lr : [<%08lx>]    psr: %08lx\n",
          regs->ARM_pc, regs->ARM_lr, regs->ARM_cpsr);
