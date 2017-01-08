@@ -871,7 +871,7 @@ long syshook_invoke_syscall(syshook_process_t *process, long scno, ...)
     // go back to ENTRY
     if (!was_entry) {
         // set back PC
-        syshook_arch_set_pc(process->state, pc - syshook_arch_get_instruction_size(instr));
+        syshook_arch_set_pc(process->state, pc - syshook_arch_get_instruction_size(process->state, instr));
 
         // copy new state to process
         syshook_arch_set_state(process, process->state);
@@ -920,7 +920,7 @@ long syshook_invoke_syscall(syshook_process_t *process, long scno, ...)
 
     if (was_entry) {
         // set back PC
-        syshook_arch_set_pc(process->state, pc - syshook_arch_get_instruction_size(instr));
+        syshook_arch_set_pc(process->state, pc - syshook_arch_get_instruction_size(process->state, instr));
 
         // copy new state to process
         syshook_arch_set_state(process, process->state);

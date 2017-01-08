@@ -84,7 +84,7 @@ void syshook_arch_set_state(syshook_process_t *process, void *state)
         safe_ptrace(PTRACE_SETREGS, process->tid, 0, (void *)regs);
 
         // set back PC
-        syshook_arch_set_pc(state, pc - syshook_arch_get_instruction_size(instr));
+        syshook_arch_set_pc(state, pc - syshook_arch_get_instruction_size(state, instr));
 
         // copy new state to process
         safe_ptrace(PTRACE_SETREGS, process->tid, 0, (void *)regs);
@@ -156,8 +156,9 @@ void syshook_arch_set_pc(void *state, long pc)
     pdata->lowargs_changed = true;
 }
 
-long syshook_arch_get_instruction_size(unsigned long instr)
+long syshook_arch_get_instruction_size(void *state, unsigned long instr)
 {
+    (void)(state);
     return is_wide_instruction(instr)?4:2;
 }
 

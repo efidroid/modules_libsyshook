@@ -27,7 +27,7 @@ long syshook_arch_get_state_size(void);
 
 long syshook_arch_get_pc(void *state);
 void syshook_arch_set_pc(void *state, long pc);
-long syshook_arch_get_instruction_size(unsigned long instr);
+long syshook_arch_get_instruction_size(void *state, unsigned long instr);
 
 bool syshook_arch_is_entry(void *state);
 long syshook_arch_syscall_get(void *state);
