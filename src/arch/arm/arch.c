@@ -1,4 +1,5 @@
 #include <common.h>
+#include <syshook/scno.h>
 
 #include <sys/syscall.h>
 #include <linux/ptrace.h>
@@ -25,12 +26,65 @@ typedef struct {
 } isyshook_state_t;
 
 typedef struct  {
+    long max_scno;
+    void **sys_call_table;
 } isyshook_pdata_t;
+
+static long syscall_map_arm[SYSHOOK_SCNO_MAX] = {
+#include <syshook/private/arch/syscall_map_arm.h>
+};
+
+static inline long syshook_scno_to_native_internal(long* map, syshook_scno_t scno_generic)
+{
+    if (scno_generic<0 || scno_generic>=SYSHOOK_SCNO_MAX) {
+        LOGF("invalid generic syscall number %ld\n", scno_generic);
+    }
+
+    long scno = map[scno_generic];
+    if (scno<0) {
+        LOGF("generic syscall %ld is not supported\n", scno_generic);
+    }
+
+    return scno;
+}
 
 void* syshook_arch_init(void) {
     isyshook_pdata_t *pdata = safe_malloc(sizeof(isyshook_pdata_t));
 
+    pdata->max_scno = 512;
+    pdata->sys_call_table = safe_calloc(pdata->max_scno, sizeof(void*));
+
     return pdata;
+}
+
+// START: public API
+void syshook_register_syscall_handler(syshook_context_t *context, syshook_scno_t scno_generic, void *handler)
+{
+    isyshook_pdata_t *pdata = context->archpdata;
+
+    long scno = syshook_scno_to_native_internal(syscall_map_arm, scno_generic);
+    if (scno>=pdata->max_scno) {
+        LOGF("Can't register syscall handler for %ld\n", scno);
+    }
+
+    LOGD("reg %ld\n", scno);
+    pdata->sys_call_table[scno] = handler;
+}
+
+long syshook_scno_to_native(syshook_process_t *process, syshook_scno_t scno_generic)
+{
+    (void)(process);
+    return syshook_scno_to_native_internal(syscall_map_arm, scno_generic);
+}
+// END: public API
+
+void* syshook_arch_get_syscall_handler(syshook_process_t *process, long scno)
+{
+    isyshook_pdata_t *pdata = process->context->archpdata;
+    if (scno>=SYSHOOK_SCNO_MAX)
+        return NULL;
+
+    return pdata->sys_call_table[scno];
 }
 
 void syshook_arch_get_state(syshook_process_t *process, void *state)
@@ -74,8 +128,9 @@ void syshook_arch_set_state(syshook_process_t *process, void *state)
         }
 
         // change scno to getpid
-        safe_ptrace(PTRACE_SET_SYSCALL, process->tid, 0, (void *)SYS_getpid);
-        syshook_arch_syscall_set(state, SYS_getpid);
+        long scno_getpid = syshook_scno_to_native(process, SYSHOOK_SCNO_getpid);
+        safe_ptrace(PTRACE_SET_SYSCALL, process->tid, 0, (void *)scno_getpid);
+        syshook_arch_syscall_set(state, scno_getpid);
 
         // copy new state to process
         safe_ptrace(PTRACE_SETREGS, process->tid, 0, (void *)regs);
@@ -283,7 +338,7 @@ void syshook_arch_setup_process_trap(syshook_process_t *process)
     long mem_size_rounded = ROUNDUP(mem_size, process->context->pagesize);
 
     // allocate child memory
-    void __user *mem = (void *)syshook_invoke_syscall(process, SYS_mmap2, NULL, mem_size_rounded, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    void __user *mem = (void *)syshook_invoke_syscall(process, syshook_scno_to_native(process, SYSHOOK_SCNO_mmap2), NULL, mem_size_rounded, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
     if (mem==NULL) {
         LOGF("can't allocate child memory\n");
     }

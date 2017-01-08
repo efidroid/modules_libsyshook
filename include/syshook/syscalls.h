@@ -17,6 +17,8 @@
 #ifndef _SYSCALLS_H
 #define _SYSCALLS_H
 
+#include <syshook/scno.h>
+
 #define asmlinkage
 
 #ifdef __CHECKER__

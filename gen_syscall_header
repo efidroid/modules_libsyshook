@@ -1,0 +1,115 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import subprocess
+
+def get_cmdoutput(args, stdin=''):
+    p = subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+    output, err = p.communicate(input=stdin.decode())
+    if p.returncode != 0:
+        raise Exception('subprocess error: %u' % (p.returncode))
+
+    return output
+
+def get_syscall_map(CC):
+    # generate list of syscalls
+    syscall_defines = '#include <sys/syscall.h>\n'
+    out = get_cmdoutput([CC, '-', '-E', '-P', '-dM'], stdin='#include <sys/syscall.h>')
+    for line in out.splitlines():
+        if not line.startswith('#define SYS'):
+            continue
+
+        defname = line.split()[1]
+        syscall_defines += defname[4:]+' '+defname+'\n'
+
+    # generate actual syscall number list
+    syscall_map = {}
+    out = get_cmdoutput([CC, '-', '-E', '-P'], stdin=syscall_defines)
+    for line in out.splitlines():
+        line = line.strip()
+        if len(line)<=0:
+            continue
+
+        arr = line.split(' ', 1)
+        name = arr[0]
+        scno = eval(arr[1])
+
+        # skip a few
+        if scno>=512:
+            continue
+        if name=='SYSCALL_BASE':
+            continue
+
+        syscall_map[name] = scno
+
+    return syscall_map
+
+def add_mapkeys_to_array(arr, l):
+    for name in l:
+        if not name in arr:
+            arr.append(name)
+
+def generate_generic2arch_map(filename, generic, l):
+    with open(filename, 'w') as f:
+        for name in generic:
+            scno = -1
+            if name in l:
+                scno = l[name]
+
+            f.write('%d, // %s\n' % (scno, name))
+
+# args
+EFIDROID_CONFIG_PATH = sys.argv[1]
+OUTDIR = sys.argv[2]
+MODULE_ARCH = os.environ['MODULE_ARCH']
+
+# include efidroid config
+execfile(EFIDROID_CONFIG_PATH+'.py')
+
+# compilers
+CC_AARCH32=TOOLCHAIN_ARM_GCC_LINUX_TARGET_PREFIX+'gcc'
+if MODULE_ARCH=='arm64':
+    CC_AARCH64=TOOLCHAIN_ARM64_GCC_LINUX_TARGET_PREFIX+'gcc'
+
+# get arch syscalls
+scnomap_arm = get_syscall_map(CC_AARCH32)
+if MODULE_ARCH=='arm64':
+    scnomap_arm64 = get_syscall_map(CC_AARCH64)
+
+# create generic scnomap
+scnomap_generic = []
+add_mapkeys_to_array(scnomap_generic, scnomap_arm)
+if MODULE_ARCH=='arm64':
+    add_mapkeys_to_array(scnomap_generic, scnomap_arm64)
+scnomap_generic = sorted(scnomap_generic)
+
+# create include directories
+try:
+    os.makedirs(OUTDIR+'/include_private/syshook/private/arch')
+except:
+    pass
+try:
+    os.makedirs(OUTDIR+'/include/syshook')
+except:
+    pass
+
+# generate arch headers
+generate_generic2arch_map(OUTDIR+'/include_private/syshook/private/arch/syscall_map_arm.h', scnomap_generic, scnomap_arm)
+if MODULE_ARCH=='arm64':
+    generate_generic2arch_map(OUTDIR+'/include_private/syshook/private/arch/syscall_map_arm64.h', scnomap_generic, scnomap_arm64)
+
+# generate generic header
+with open(OUTDIR+'/include/syshook/scno.h', 'w') as f:
+    f.write('#ifndef _SYSHOOK_SYSCALLS_SCNO_H\n')
+    f.write('#define _SYSHOOK_SYSCALLS_SCNO_H\n')
+    f.write('enum {\n')
+
+    for i, name in enumerate(scnomap_generic):
+        f.write('SYSHOOK_SCNO_%s = %d,\n' % (name, i))
+
+    f.write('SYSHOOK_SCNO_MAX,\n')
+    f.write('};\n')
+    f.write('typedef long syshook_scno_t;\n')
+    f.write('#endif // _SYSHOOK_SYSCALLS_SCNO_H\n')
+

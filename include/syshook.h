@@ -26,15 +26,12 @@
 #include <syshook/list.h>
 #include <syshook/syscalls.h>
 
-#define SYSHOOK_NUM_SYSCALLS 2048
-
 typedef struct syshook_context syshook_context_t;
 typedef struct syshook_process syshook_process_t;
 
 struct syshook_context {
     int pagesize;
     syshook_list_node_t processes;
-    void **sys_call_table;
     long ptrace_options;
     pid_t roottid;
 
@@ -97,10 +94,13 @@ struct syshook_process {
     void *pdata;
 };
 
+// these are implemented by the arch directly
+long syshook_scno_to_native(syshook_process_t *process, syshook_scno_t scno);
+void syshook_register_syscall_handler(syshook_context_t *context, syshook_scno_t scno_generic, void *handler);
+
 // syshook init
-syshook_context_t *syshook_create_context(void **sys_call_table);
-int syshook_execvp(char **argv, void **sys_call_table);
-int syshook_execvp_ex(syshook_context_t *context, char **argv);
+syshook_context_t *syshook_create_context(void);
+int syshook_execvp(syshook_context_t *context, char **argv);
 
 // syscall invocation
 long syshook_invoke_hookee(syshook_process_t *process);

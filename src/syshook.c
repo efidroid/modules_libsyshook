@@ -146,10 +146,9 @@ static long syshook_invoke_syscall_handler(syshook_process_t *process, long scno
     }
 
     else {
-        if (scno>=SYSHOOK_NUM_SYSCALLS || !process->context->sys_call_table[scno])
+        fn = syshook_arch_get_syscall_handler(process, scno);
+        if (!fn)
             return -1;
-
-        fn = process->context->sys_call_table[scno];
     }
 
     long a0 = syshook_arch_argument_get(process->state, 0);
@@ -205,7 +204,7 @@ static int syshook_handle_child_syscall(syshook_process_t *process)
     //LOGD("[%d:%d][SYSCALL][%s] %ld\n", process->pid, process->tid, is_entry?"ENTRY":"EXIT", scno);
 
     if (process->expect_execve) {
-        if (scno==SYS_execve) {
+        if (scno==syshook_scno_to_native(process, SYSHOOK_SCNO_execve)) {
             // execve returned due to an error
             process->expect_syscall_exit = true;
             process->expect_execve = false;
@@ -214,7 +213,7 @@ static int syshook_handle_child_syscall(syshook_process_t *process)
     }
 
     // this call will not have an exit, continue
-    if (!is_entry && scno==SYS_restart_syscall) {
+    if (!is_entry && scno==syshook_scno_to_native(process, SYSHOOK_SCNO_restart_syscall)) {
         return 0;
     }
 
@@ -234,7 +233,7 @@ static int syshook_handle_child_syscall(syshook_process_t *process)
         process->exit_handler = NULL;
 
         if (process->trap_mem && process->sigstop_received) {
-            long ret = syshook_invoke_syscall(process, SYS_munmap, process->trap_mem, process->trap_size);
+            long ret = syshook_invoke_syscall(process, syshook_scno_to_native(process, SYSHOOK_SCNO_munmap), process->trap_mem, process->trap_size);
             // free up trap memory
             if (ret)
                 LOGF("can't munmap process trap in child: %d\n", (int)ret);
@@ -246,7 +245,7 @@ static int syshook_handle_child_syscall(syshook_process_t *process)
     }
 
     long ret = -1;
-    bool handler_exists = (scno<SYSHOOK_NUM_SYSCALLS && process->context->sys_call_table[scno]) || process->exit_handler;
+    bool handler_exists = syshook_arch_get_syscall_handler(process, scno) || process->exit_handler;
     if (handler_exists) {
         ret = syshook_invoke_syscall_handler(process, scno);
 
@@ -264,7 +263,7 @@ static int syshook_handle_child_syscall(syshook_process_t *process)
         // the handler didn't call the original function, so convert the call to getpid
         is_entry = syshook_arch_is_entry(process->state);
         if (is_entry) {
-            syshook_arch_syscall_set(process->state, SYS_getpid);
+            syshook_arch_syscall_set(process->state, syshook_scno_to_native(process, SYSHOOK_SCNO_getpid));
             syshook_invoke_hookee(process);
         }
     }
@@ -279,7 +278,7 @@ static int syshook_handle_child_syscall(syshook_process_t *process)
         process->expect_syscall_exit = true;
 
         // check if this is execve
-        if (is_entry && scno==SYS_execve)
+        if (is_entry && scno==syshook_scno_to_native(process, SYSHOOK_SCNO_execve))
             process->expect_execve = true;
 
         return 0;
@@ -295,7 +294,7 @@ static int syshook_handle_child_syscall(syshook_process_t *process)
     }
 
     // execve returned due to an error from within a syscall handler
-    if (scno==SYS_execve) {
+    if (scno==syshook_scno_to_native(process, SYSHOOK_SCNO_execve)) {
         process->expect_execve = false;
     }
 
@@ -448,7 +447,7 @@ static void *syshook_child_thread(void *pdata)
     parsed_status_t parsed_status;
 
     thread_process = process;
-    process->thread_tid = (pid_t)syscall(SYS_gettid);
+    process->thread_tid = (pid_t)syscall(syshook_scno_to_native(process, SYSHOOK_SCNO_gettid));
     util_setsighandler(SIGUSR1, thread_usr1_handler);
 
     int rc = setjmp(process->jmpbuf);
@@ -700,7 +699,7 @@ void syshook_handle_child_signals(syshook_process_t *process, parsed_status_t *p
 
 // public API
 
-syshook_context_t *syshook_create_context(void **sys_call_table)
+syshook_context_t *syshook_create_context(void)
 {
     long ptrace_options = 0;
 
@@ -716,7 +715,6 @@ syshook_context_t *syshook_create_context(void **sys_call_table)
     syshook_context_t *context = calloc(1, sizeof(syshook_context_t));
     context->pagesize = getpagesize();
     list_initialize(&context->processes);
-    context->sys_call_table = sys_call_table;
     context->ptrace_options = ptrace_options;
     pthread_mutex_init(&context->lock, NULL);
     pthread_cond_init(&context->exit_cond, NULL);
@@ -726,13 +724,7 @@ syshook_context_t *syshook_create_context(void **sys_call_table)
     return context;
 }
 
-int syshook_execvp(char **argv, void **sys_call_table)
-{
-    syshook_context_t *context = syshook_create_context(sys_call_table);
-    return syshook_execvp_ex(context, argv);
-}
-
-int syshook_execvp_ex(syshook_context_t *context, char **argv)
+int syshook_execvp(syshook_context_t *context, char **argv)
 {
     int rc;
     int status;
@@ -838,7 +830,7 @@ long syshook_invoke_hookee(syshook_process_t *process)
     syshook_arch_set_state(process, process->state);
 
     // check if this is execve
-    if (syshook_arch_syscall_get(process->state)==SYS_execve)
+    if (syshook_arch_syscall_get(process->state)==syshook_scno_to_native(process, SYSHOOK_SCNO_execve))
         process->expect_execve = true;
 
     // continue
@@ -904,7 +896,7 @@ long syshook_invoke_syscall(syshook_process_t *process, long scno, ...)
     syshook_arch_set_state(process, process->state);
 
     // check if this is execve
-    if (syshook_arch_syscall_get(process->state)==SYS_execve)
+    if (syshook_arch_syscall_get(process->state)==syshook_scno_to_native(process, SYSHOOK_SCNO_execve))
         process->expect_execve = true;
 
     // continue
@@ -1087,10 +1079,10 @@ char *syshook_strndup_user(syshook_process_t *process, const char __user *s, lon
 
 void *syshook_alloc_user(syshook_process_t *process, size_t size)
 {
-    return (void *)syshook_invoke_syscall(process, SYS_mmap2, NULL, ROUNDUP(size, process->context->pagesize), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    return (void *)syshook_invoke_syscall(process, syshook_scno_to_native(process, SYSHOOK_SCNO_mmap2), NULL, ROUNDUP(size, process->context->pagesize), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
 }
 
 int syshook_free_user(syshook_process_t *process, void *addr, size_t size)
 {
-    return (int)syshook_invoke_syscall(process, SYS_munmap, addr, ROUNDUP(size, process->context->pagesize));
+    return (int)syshook_invoke_syscall(process, syshook_scno_to_native(process, SYSHOOK_SCNO_munmap), addr, ROUNDUP(size, process->context->pagesize));
 }

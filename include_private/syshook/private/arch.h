@@ -20,6 +20,7 @@
 #include <stdbool.h>
 
 void* syshook_arch_init(void);
+void* syshook_arch_get_syscall_handler(syshook_process_t *process, long scno);
 
 void syshook_arch_get_state(syshook_process_t *process, void *state);
 void syshook_arch_set_state(syshook_process_t *process, void *state);
