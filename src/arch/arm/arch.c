@@ -318,4 +318,5 @@ void syshook_arch_show_regs(void *state)
     buf[4] = '\0';
 
     LOGD("xPSR: %08lx Flags: %s\n", regs->ARM_cpsr, buf);
+    LOGD("\n");
 }
