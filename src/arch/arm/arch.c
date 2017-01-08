@@ -24,6 +24,15 @@ typedef struct {
     struct pt_regs regs;
 } isyshook_state_t;
 
+typedef struct  {
+} isyshook_pdata_t;
+
+void* syshook_arch_init(void) {
+    isyshook_pdata_t *pdata = safe_malloc(sizeof(isyshook_pdata_t));
+
+    return pdata;
+}
+
 void syshook_arch_get_state(syshook_process_t *process, void *state)
 {
     isyshook_state_t *istate = state;

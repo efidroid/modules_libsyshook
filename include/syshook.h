@@ -38,6 +38,9 @@ struct syshook_context {
     long ptrace_options;
     pid_t roottid;
 
+    // arch
+    void *archpdata;
+
     // threading
     pthread_mutex_t lock;
 

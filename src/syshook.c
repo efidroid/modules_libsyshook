@@ -721,6 +721,7 @@ syshook_context_t *syshook_create_context(void **sys_call_table)
     pthread_mutex_init(&context->lock, NULL);
     pthread_cond_init(&context->exit_cond, NULL);
     pthread_mutex_init(&context->exit_mutex, NULL);
+    context->archpdata = syshook_arch_init();
 
     return context;
 }
