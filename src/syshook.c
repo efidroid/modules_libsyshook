@@ -104,6 +104,8 @@ static syshook_process_t *syshook_handle_new_process(syshook_context_t *context,
     pthread_mutex_init(&process->lock, NULL);
     pthread_mutex_init(&process->clone_flags_lock, NULL);
     list_initialize(&process->clone_flags_list);
+    syshook_arch_init_state(process->original_state);
+    syshook_arch_init_state(process->state);
 
     pthread_mutex_lock(&context->lock);
     list_add_tail(&context->processes, &process->node);

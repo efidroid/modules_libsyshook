@@ -127,6 +127,11 @@ bool syshook_arch_is_entry(void *state)
     return (pdata->regs.ARM_ip==0);
 }
 
+void syshook_arch_init_state(void *state)
+{
+    (void)(state);
+}
+
 void syshook_arch_copy_state(void *dst, void *src)
 {
     memcpy(dst, src, sizeof(syshook_internal_t));
