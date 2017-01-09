@@ -177,6 +177,7 @@ void syshook_arch_set_state(syshook_process_t *process, void *state)
 
     if (istate->result_changed) {
         regs->ARM_r0 = istate->result;
+        istate->lowargs_changed = true;
     }
 
     if (istate->lowargs_changed || istate->highargs_changed) {
