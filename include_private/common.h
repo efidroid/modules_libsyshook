@@ -275,4 +275,22 @@ static inline void *safe_calloc(size_t num, size_t size)
     return mem;
 }
 
+static inline long syshook_scno_to_native_safe(syshook_process_t *process, syshook_scno_t scno_generic)
+{
+    long scno = syshook_scno_to_native(process, scno_generic);
+
+    if(scno<0) {
+        switch(scno) {
+            case -EINVAL:
+                LOGF("invalid generic syscall number %ld\n", scno_generic);
+            case -ENOSYS:
+                LOGF("generic syscall %ld is not supported\n", scno_generic);
+            default:
+                LOGF("unknown error in syshook_scno_to_native: %ld\n", scno);
+        }
+    }
+
+    return scno;
+}
+
 #endif

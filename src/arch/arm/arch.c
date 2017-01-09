@@ -37,12 +37,12 @@ static long syscall_map_arm[SYSHOOK_SCNO_MAX] = {
 static inline long syshook_scno_to_native_internal(long* map, syshook_scno_t scno_generic)
 {
     if (scno_generic<0 || scno_generic>=SYSHOOK_SCNO_MAX) {
-        LOGF("invalid generic syscall number %ld\n", scno_generic);
+        return -EINVAL;
     }
 
     long scno = map[scno_generic];
     if (scno<0) {
-        LOGF("generic syscall %ld is not supported\n", scno_generic);
+        return -ENOSYS;
     }
 
     return scno;

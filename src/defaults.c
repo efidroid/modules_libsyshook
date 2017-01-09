@@ -84,7 +84,7 @@ static long handle_fork(syshook_process_t *process, unsigned long clone_flags)
         // trap_mem is only set in case we're not sharing the VM with the child
         // effectively, wo only free the memory if we have our own VM or if the clone failed
         if (process->trap_mem && do_free_trap) {
-            long ret = syshook_invoke_syscall(process, syshook_scno_to_native(process, SYSHOOK_SCNO_munmap), process->trap_mem, process->trap_size);
+            long ret = syshook_invoke_syscall(process, syshook_scno_to_native_safe(process, SYSHOOK_SCNO_munmap), process->trap_mem, process->trap_size);
 
             // free up trap memory
             if (ret)
