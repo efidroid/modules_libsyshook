@@ -34,7 +34,7 @@ static long syscall_map_arm[SYSHOOK_SCNO_MAX] = {
 #include <syshook/private/arch/syscall_map_arm.h>
 };
 
-static inline long syshook_scno_to_native_internal(long* map, syshook_scno_t scno_generic)
+static inline __attribute__((always_inline)) long syshook_scno_to_native_internal(long* map, syshook_scno_t scno_generic)
 {
     if (scno_generic<0 || scno_generic>=SYSHOOK_SCNO_MAX) {
         return -EINVAL;
