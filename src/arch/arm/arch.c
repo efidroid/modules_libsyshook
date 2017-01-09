@@ -64,10 +64,8 @@ void syshook_register_syscall_handler(syshook_context_t *context, syshook_scno_t
 
     long scno = syshook_scno_to_native_internal(syscall_map_arm, scno_generic);
     if (scno>=pdata->max_scno) {
-        LOGF("Can't register syscall handler for %ld\n", scno);
+        LOGD("Can't register syscall handler for %ld: %ld\n", scno_generic, scno);
     }
-
-    LOGD("reg %ld\n", scno);
     pdata->sys_call_table[scno] = handler;
 }
 
@@ -87,7 +85,7 @@ void *syshook_mmap(syshook_process_t *process, void *addr, size_t length, int pr
 void* syshook_arch_get_syscall_handler(syshook_process_t *process, long scno)
 {
     isyshook_pdata_t *pdata = process->context->archpdata;
-    if (scno>=SYSHOOK_SCNO_MAX)
+    if (scno>=pdata->max_scno)
         return NULL;
 
     return pdata->sys_call_table[scno];
@@ -97,7 +95,10 @@ void syshook_arch_get_state(syshook_process_t *process, void *state)
 {
     isyshook_state_t *istate = state;
 
+    // get regs
     safe_ptrace(PTRACE_GETREGS, process->tid, 0, &istate->regs);
+
+    // store return value separately
     istate->result = syshook_arch_argument_get(state, 0);
 
     // reset
@@ -329,8 +330,6 @@ void syshook_arch_setup_process_trap(syshook_process_t *process)
 {
     void *fn_template;
     long mem_size;
-
-    // get regs
     isyshook_state_t *istate = process->state;
 
     // get template to use
@@ -341,6 +340,8 @@ void syshook_arch_setup_process_trap(syshook_process_t *process)
         fn_template = INJECTION_PTR(inj_trap_arm);
         mem_size = INJECTION_SIZE(inj_trap_arm);
     }
+
+    // roundup size
     long mem_size_rounded = ROUNDUP(mem_size, process->context->pagesize);
 
     // allocate child memory
