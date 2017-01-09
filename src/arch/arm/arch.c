@@ -76,6 +76,12 @@ long syshook_scno_to_native(syshook_process_t *process, syshook_scno_t scno_gene
     (void)(process);
     return syshook_scno_to_native_internal(syscall_map_arm, scno_generic);
 }
+
+void *syshook_mmap(syshook_process_t *process, void *addr, size_t length, int prot, int flags, int fd, off_t pgoff)
+{
+    long scno = syshook_scno_to_native_safe(process, SYSHOOK_SCNO_mmap2);
+    return (void*)syshook_invoke_syscall(process, scno, addr, length, prot, flags, fd, pgoff);
+}
 // END: public API
 
 void* syshook_arch_get_syscall_handler(syshook_process_t *process, long scno)
@@ -338,9 +344,9 @@ void syshook_arch_setup_process_trap(syshook_process_t *process)
     long mem_size_rounded = ROUNDUP(mem_size, process->context->pagesize);
 
     // allocate child memory
-    void __user *mem = (void *)syshook_invoke_syscall(process, syshook_scno_to_native(process, SYSHOOK_SCNO_mmap2), NULL, mem_size_rounded, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-    if (mem==NULL) {
-        LOGF("can't allocate child memory\n");
+    void __user *mem = syshook_mmap(process, NULL, mem_size_rounded, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    if ((long)mem<0 && (long)mem>=-process->context->pagesize) {
+        LOGF("can't allocate child memory %ld %p\n", (long)mem, mem);
     }
 
     // copy inj_trap code

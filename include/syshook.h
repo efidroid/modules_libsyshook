@@ -97,6 +97,7 @@ struct syshook_process {
 // these are implemented by the arch directly
 long syshook_scno_to_native(syshook_process_t *process, syshook_scno_t scno);
 void syshook_register_syscall_handler(syshook_context_t *context, syshook_scno_t scno_generic, void *handler);
+void *syshook_mmap(syshook_process_t *process, void *addr, size_t length, int prot, int flags, int fd, off_t pgoff);
 
 // syshook init
 syshook_context_t *syshook_create_context(void);
