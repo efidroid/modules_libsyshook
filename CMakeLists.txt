@@ -19,8 +19,8 @@ add_definitions(-DSYSHOOK_INTERNAL)
 add_library(syshook
     src/syshook.c
     src/defaults.c
-    src/arch/arm/arch.c
-    src/arch/arm/injections.S
+    src/arch/$ENV{MODULE_ARCH}/arch.c
+    src/arch/$ENV{MODULE_ARCH}/injections.S
 )
 include_directories(
     include
