@@ -571,6 +571,10 @@ void syshook_arch_show_regs_aarch64(void *state)
 
 void syshook_arch_show_regs(void *state)
 {
+    isyshook_state_t *istate = state;
+    LOGD("changed: %s %s %s\n", istate->scno_changed?"scno":"", istate->result_changed?"ret":"", istate->regs_changed?"regs":"");
+    LOGD("result: %016llx\n", istate->result);
+
     if (is_compat_task(state))
         syshook_arch_show_regs_aarch32(state);
     else
