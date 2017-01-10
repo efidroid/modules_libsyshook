@@ -49,7 +49,7 @@ struct compat_pt_regs {
 typedef struct {
     bool scno_changed;
     bool result_changed;
-    long result;
+    unsigned long long result;
     bool regs_changed;
 
     union {
