@@ -185,11 +185,6 @@ static int syshook_handle_child_syscall(syshook_process_t *process)
             LOGF("execve did not happen\n");
     }
 
-    // this call will not have an exit, continue
-    if (!is_entry && scno==syshook_scno_to_native_safe(process, SYSHOOK_SCNO_restart_syscall)) {
-        return 0;
-    }
-
     // the syscall had no handler and got ignored
     if (!is_entry && process->expect_syscall_exit) {
         process->expect_syscall_exit = false;
@@ -455,6 +450,7 @@ static void *syshook_child_thread(void *pdata)
 
         // update process state
         process->tid = process->pid;
+        process->expect_syscall_exit = true;
         process->expect_execve = false;
         if (process->tid==process->context->roottid) {
             process->is_root_process = true;
@@ -627,6 +623,7 @@ void syshook_handle_child_signals(syshook_process_t *process, parsed_status_t *p
                     }
                 }
 
+                process->expect_syscall_exit = true;
                 process->expect_execve = false;
                 syshook_continue(process, 0);
                 syshook_thread_exit(THREAD_EXIT_CODE_EXEC);
