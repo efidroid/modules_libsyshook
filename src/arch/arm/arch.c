@@ -192,6 +192,38 @@ void syshook_arch_set_state(syshook_process_t *process, void *state)
     istate->result_changed = false;
 }
 
+void syshook_arch_copy_state_diffs(void *dst, void *src)
+{
+    isyshook_state_t *istate_dst = dst;
+    isyshook_state_t *istate_src = src;
+
+    // restore scno
+    // scno is stored in one of the args, so do this before restoring them
+    long scno_now = syshook_arch_syscall_get(dst);
+    long scno_backup = syshook_arch_syscall_get(src);
+    if (scno_now!=scno_backup) {
+        syshook_arch_syscall_set(dst, scno_backup);
+    }
+
+    // restore arguments
+    int i;
+    for (i=0; i<=6; i++) {
+        long val = syshook_arch_argument_get(dst, i);
+        long val_backup = syshook_arch_argument_get(src, i);
+        if (val!=val_backup) {
+            syshook_arch_argument_set(dst, i, val_backup);
+        }
+    }
+
+    // restore result
+    long rc_now = syshook_arch_result_get(dst);
+    long rc_backup = syshook_arch_result_get(src);
+    if (rc_now!=rc_backup) {
+        syshook_arch_result_set(dst, rc_backup);
+    }
+    istate_dst->result_changed = istate_src->result_changed;
+}
+
 bool syshook_arch_is_entry(void *state)
 {
     isyshook_state_t *istate = state;

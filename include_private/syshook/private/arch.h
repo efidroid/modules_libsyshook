@@ -27,6 +27,7 @@ void syshook_arch_set_state(syshook_process_t *process, void *state);
 void syshook_arch_init_state(void *state);
 void syshook_arch_copy_state(void *dst, void *src);
 long syshook_arch_get_state_size(void);
+void syshook_arch_copy_state_diffs(void *dst, void *src);
 
 long syshook_arch_get_pc(void *state);
 void syshook_arch_set_pc(void *state, long pc);
