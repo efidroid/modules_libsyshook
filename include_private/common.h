@@ -279,8 +279,8 @@ static inline long syshook_scno_to_native_safe(syshook_process_t *process, sysho
 {
     long scno = syshook_scno_to_native(process, scno_generic);
 
-    if(scno<0) {
-        switch(scno) {
+    if (scno<0) {
+        switch (scno) {
             case -EINVAL:
                 LOGF("invalid generic syscall number %ld\n", scno_generic);
             case -ENOSYS:

@@ -16,34 +16,34 @@
 #define thumb_mode(regs) (((regs)->ARM_cpsr & PSR_T_BIT))
 #endif
 
-#define PSR_T_BIT	0x00000020
-#define PTRACE_SET_SYSCALL	23
+#define PSR_T_BIT   0x00000020
+#define PTRACE_SET_SYSCALL  23
 
-#define ARM_cpsr	uregs[16]
-#define ARM_pc		uregs[15]
-#define ARM_lr		uregs[14]
-#define ARM_sp		uregs[13]
-#define ARM_ip		uregs[12]
-#define ARM_fp		uregs[11]
-#define ARM_r10		uregs[10]
-#define ARM_r9		uregs[9]
-#define ARM_r8		uregs[8]
-#define ARM_r7		uregs[7]
-#define ARM_r6		uregs[6]
-#define ARM_r5		uregs[5]
-#define ARM_r4		uregs[4]
-#define ARM_r3		uregs[3]
-#define ARM_r2		uregs[2]
-#define ARM_r1		uregs[1]
-#define ARM_r0		uregs[0]
-#define ARM_ORIG_r0	uregs[17]
+#define ARM_cpsr    uregs[16]
+#define ARM_pc      uregs[15]
+#define ARM_lr      uregs[14]
+#define ARM_sp      uregs[13]
+#define ARM_ip      uregs[12]
+#define ARM_fp      uregs[11]
+#define ARM_r10     uregs[10]
+#define ARM_r9      uregs[9]
+#define ARM_r8      uregs[8]
+#define ARM_r7      uregs[7]
+#define ARM_r6      uregs[6]
+#define ARM_r5      uregs[5]
+#define ARM_r4      uregs[4]
+#define ARM_r3      uregs[3]
+#define ARM_r2      uregs[2]
+#define ARM_r1      uregs[1]
+#define ARM_r0      uregs[0]
+#define ARM_ORIG_r0 uregs[17]
 
 INJECTION_DECLARE(inj_trap_aarch32);
 INJECTION_DECLARE(inj_trap_aarch32_thumb);
 INJECTION_DECLARE(inj_trap_aarch64);
 
 struct compat_pt_regs {
-	uint32_t uregs[18];
+    uint32_t uregs[18];
 };
 
 typedef struct {
@@ -73,7 +73,7 @@ static long syscall_map_aarch64[SYSHOOK_SCNO_MAX] = {
 #include <syshook/private/arch/syscall_map_arm64.h>
 };
 
-static inline __attribute__((always_inline)) long syshook_scno_to_native_internal(long* map, syshook_scno_t scno_generic)
+static inline __attribute__((always_inline)) long syshook_scno_to_native_internal(long *map, syshook_scno_t scno_generic)
 {
     if (scno_generic<0 || scno_generic>=SYSHOOK_SCNO_MAX) {
         return -EINVAL;
@@ -87,17 +87,19 @@ static inline __attribute__((always_inline)) long syshook_scno_to_native_interna
     return scno;
 }
 
-static inline __attribute__((always_inline)) int is_compat_task(void* state) {
+static inline __attribute__((always_inline)) int is_compat_task(void *state)
+{
     isyshook_state_t *istate = state;
     return (istate->iov.iov_len==sizeof(istate->regs.aarch32));
 }
 
-void* syshook_arch_init(void) {
+void *syshook_arch_init(void)
+{
     isyshook_pdata_t *pdata = safe_malloc(sizeof(isyshook_pdata_t));
 
     pdata->max_scno = 512;
-    pdata->sys_call_table_aarch32 = safe_calloc(pdata->max_scno, sizeof(void*));
-    pdata->sys_call_table_aarch64 = safe_calloc(pdata->max_scno, sizeof(void*));
+    pdata->sys_call_table_aarch32 = safe_calloc(pdata->max_scno, sizeof(void *));
+    pdata->sys_call_table_aarch64 = safe_calloc(pdata->max_scno, sizeof(void *));
 
     return pdata;
 }
@@ -134,19 +136,18 @@ void *syshook_mmap(syshook_process_t *process, void *addr, size_t length, int pr
     if (is_compat_task(process->state)) {
         long scno = syshook_scno_to_native_safe(process, SYSHOOK_SCNO_mmap2);
         long ret = syshook_invoke_syscall(process, scno, addr, length, prot, flags, fd, pgoff);
-        if((int32_t)ret<0 && (int32_t)ret>-process->context->pagesize) {
+        if ((int32_t)ret<0 && (int32_t)ret>-process->context->pagesize) {
             ret = (int32_t)ret;
         }
-        return (void*)ret;
-    }
-    else {
+        return (void *)ret;
+    } else {
         long scno = syshook_scno_to_native_safe(process, SYSHOOK_SCNO_mmap);
-        return (void*)syshook_invoke_syscall(process, scno, addr, length, prot, flags, fd, pgoff<<12);
+        return (void *)syshook_invoke_syscall(process, scno, addr, length, prot, flags, fd, pgoff<<12);
     }
 }
 // END: public API
 
-void* syshook_arch_get_syscall_handler(syshook_process_t *process, long scno)
+void *syshook_arch_get_syscall_handler(syshook_process_t *process, long scno)
 {
     isyshook_pdata_t *pdata = process->context->archpdata;
     if (scno>=pdata->max_scno)
@@ -304,8 +305,7 @@ long syshook_arch_get_instruction_size(void *state, unsigned long instr)
 {
     if (is_compat_task(state)) {
         return is_wide_instruction(instr)?4:2;
-    }
-    else {
+    } else {
         return 4;
     }
 }
@@ -357,8 +357,7 @@ long syshook_arch_argument_get(void *state, int num)
                 LOGF("Invalid argument number %d\n", num);
                 return -1;
         }
-    }
-    else {
+    } else {
         switch (num) {
             case 0:
                 return istate->regs.aarch64.regs[0];
@@ -411,8 +410,7 @@ void syshook_arch_argument_set(void *state, int num, long value)
             default:
                 LOGF("Invalid argument number %d\n", num);
         }
-    }
-    else {
+    } else {
         switch (num) {
             case 0:
                 istate->regs.aarch64.regs[0] = value;
@@ -472,8 +470,7 @@ void syshook_arch_setup_process_trap(syshook_process_t *process)
             fn_template = INJECTION_PTR(inj_trap_aarch32);
             mem_size = INJECTION_SIZE(inj_trap_aarch32);
         }
-    }
-    else {
+    } else {
         fn_template = INJECTION_PTR(inj_trap_aarch64);
         mem_size = INJECTION_SIZE(inj_trap_aarch64);
     }

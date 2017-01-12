@@ -34,7 +34,7 @@ static long syscall_map_arm[SYSHOOK_SCNO_MAX] = {
 #include <syshook/private/arch/syscall_map_arm.h>
 };
 
-static inline __attribute__((always_inline)) long syshook_scno_to_native_internal(long* map, syshook_scno_t scno_generic)
+static inline __attribute__((always_inline)) long syshook_scno_to_native_internal(long *map, syshook_scno_t scno_generic)
 {
     if (scno_generic<0 || scno_generic>=SYSHOOK_SCNO_MAX) {
         return -EINVAL;
@@ -48,11 +48,12 @@ static inline __attribute__((always_inline)) long syshook_scno_to_native_interna
     return scno;
 }
 
-void* syshook_arch_init(void) {
+void *syshook_arch_init(void)
+{
     isyshook_pdata_t *pdata = safe_malloc(sizeof(isyshook_pdata_t));
 
     pdata->max_scno = 512;
-    pdata->sys_call_table = safe_calloc(pdata->max_scno, sizeof(void*));
+    pdata->sys_call_table = safe_calloc(pdata->max_scno, sizeof(void *));
 
     return pdata;
 }
@@ -78,11 +79,11 @@ long syshook_scno_to_native(syshook_process_t *process, syshook_scno_t scno_gene
 void *syshook_mmap(syshook_process_t *process, void *addr, size_t length, int prot, int flags, int fd, off_t pgoff)
 {
     long scno = syshook_scno_to_native_safe(process, SYSHOOK_SCNO_mmap2);
-    return (void*)syshook_invoke_syscall(process, scno, addr, length, prot, flags, fd, pgoff);
+    return (void *)syshook_invoke_syscall(process, scno, addr, length, prot, flags, fd, pgoff);
 }
 // END: public API
 
-void* syshook_arch_get_syscall_handler(syshook_process_t *process, long scno)
+void *syshook_arch_get_syscall_handler(syshook_process_t *process, long scno)
 {
     isyshook_pdata_t *pdata = process->context->archpdata;
     if (scno>=pdata->max_scno)
