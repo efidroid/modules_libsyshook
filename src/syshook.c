@@ -1049,7 +1049,12 @@ char *syshook_strndup_user(syshook_process_t *process, const char __user *s, lon
 
 void *syshook_alloc_user(syshook_process_t *process, size_t size)
 {
-    return syshook_mmap(process, NULL, ROUNDUP(size, process->context->pagesize), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    void* addr = syshook_mmap(process, NULL, ROUNDUP(size, process->context->pagesize), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    if ((long)addr<0 && (long)addr>=-process->context->pagesize) {
+        errno = (long)addr;
+        return NULL;
+    }
+    return addr;
 }
 
 int syshook_free_user(syshook_process_t *process, void *addr, size_t size)

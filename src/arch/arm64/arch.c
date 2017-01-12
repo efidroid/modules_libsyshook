@@ -43,7 +43,7 @@ INJECTION_DECLARE(inj_trap_aarch32_thumb);
 INJECTION_DECLARE(inj_trap_aarch64);
 
 struct compat_pt_regs {
-	int32_t uregs[18];
+	uint32_t uregs[18];
 };
 
 typedef struct {
@@ -132,12 +132,12 @@ long syshook_scno_to_native(syshook_process_t *process, syshook_scno_t scno_gene
 void *syshook_mmap(syshook_process_t *process, void *addr, size_t length, int prot, int flags, int fd, off_t pgoff)
 {
     if (is_compat_task(process->state)) {
-        // since the value is either negative or an unsigned addr, we have to apply some casting magic
         long scno = syshook_scno_to_native_safe(process, SYSHOOK_SCNO_mmap2);
-        int32_t retval = (int32_t)syshook_invoke_syscall(process, scno, addr, length, prot, flags, fd, pgoff);
-        if (retval<0 && retval>=-process->context->pagesize)
-            return (void*)(intptr_t)retval;
-        return (void*)(uintptr_t)(uint32_t)retval;
+        long ret = syshook_invoke_syscall(process, scno, addr, length, prot, flags, fd, pgoff);
+        if((int32_t)ret<0 && (int32_t)ret>-process->context->pagesize) {
+            ret = (int32_t)ret;
+        }
+        return (void*)ret;
     }
     else {
         long scno = syshook_scno_to_native_safe(process, SYSHOOK_SCNO_mmap);
