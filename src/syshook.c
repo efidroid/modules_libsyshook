@@ -415,7 +415,7 @@ static void *syshook_child_thread(void *pdata)
     parsed_status_t parsed_status;
 
     thread_process = process;
-    process->thread_tid = (pid_t)syscall(syshook_scno_to_native_safe(process, SYSHOOK_SCNO_gettid));
+    process->thread_tid = (pid_t)syscall(SYS_gettid);
     util_setsighandler(SIGUSR1, thread_usr1_handler);
 
     int rc = setjmp(process->jmpbuf);
